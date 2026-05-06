@@ -406,15 +406,13 @@ class EtherFiClient:
             usd_price = price_map.get(addr.lower(), 0)
             usd_value = amount * usd_price
             if amount > 0.000001:
-                # Build static icon URL from icon_cache
+                # Build static icon URL from icon_cache (prefer SVG, all pre-cached)
                 icon_url = ""
-                if info.get("icon_png"):
-                    # icon_png is like "/app/cash/images/tokens/png/usdt.png"
-                    # icon_cache filename: token_png_usdt.png
-                    path = info["icon_png"].replace("/app/cash/images/tokens/", "").replace("/", "_")
-                    icon_url = f"/icons/token_{path}"
-                elif info.get("icon_svg"):
+                if info.get("icon_svg"):
                     path = info["icon_svg"].replace("/app/cash/images/tokens/", "").replace("/", "_")
+                    icon_url = f"/icons/token_{path}"
+                elif info.get("icon_png"):
+                    path = info["icon_png"].replace("/app/cash/images/tokens/", "").replace("/", "_")
                     icon_url = f"/icons/token_{path}"
 
                 balances.append({
