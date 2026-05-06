@@ -8,10 +8,14 @@ Auth requires only: session_{userId} cookie + X-Active-User header + Origin/Refe
 from __future__ import annotations
 
 import json
+import time
 import requests
 from .crypto import encrypt_session_id, decrypt_secret
 
 BASE_URL = "https://www.ether.fi/app/cash/api"
+ASSETS_CACHE_TTL = 3600
+_assets_cache: dict | None = None
+_assets_cache_at = 0.0
 
 CHAIN_NAMES = {
     1: "Ethereum", 10: "Optimism", 56: "BNB Chain", 130: "Engram",
@@ -412,10 +416,16 @@ class EtherFiClient:
         resp.raise_for_status()
         return resp.json().get("data", {})
 
-    def get_assets(self) -> dict:
+    def get_assets(self, force_refresh: bool = False) -> dict:
+        global _assets_cache, _assets_cache_at
+        now = time.time()
+        if not force_refresh and _assets_cache is not None and now - _assets_cache_at < ASSETS_CACHE_TTL:
+            return _assets_cache
         resp = self.session.get(f"{BASE_URL}/assets", headers=self._headers())
         resp.raise_for_status()
-        return resp.json().get("data", {})
+        _assets_cache = resp.json().get("data", {})
+        _assets_cache_at = now
+        return _assets_cache
 
     def get_balances(self, details: dict | None = None, assets_config: dict | None = None, summary: dict | None = None) -> dict:
         """Get resolved balances with token symbols and spending limits."""
@@ -483,9 +493,9 @@ class EtherFiClient:
             "monthly_used": spending.get("monthly", {}).get("used", 0),
         }
 
-    def get_deposit_info(self) -> dict:
+    def get_deposit_info(self, summary: dict | None = None) -> dict:
         """Get deposit address and supported topup tokens with per-network addresses."""
-        summary = self.get_account_summary()
+        summary = summary if summary is not None else self.get_account_summary()
         assets = self.get_assets()
 
         topup_tokens = []

@@ -310,6 +310,8 @@ def add_account(body: dict, auth: dict = Depends(require_auth)):
         "label": label or summary.get("email", ""), "email": summary.get("email", ""),
         "name": summary.get("name", ""), "user_id": summary.get("user_id", ""),
         "account_id": summary.get("account_id", ""), "safe_id": summary.get("safe_id", ""),
+        "safe_address": summary.get("safe_address", ""), "chain_id": summary.get("chain_id", 0),
+        "chain_name": summary.get("chain_name", ""),
         "added_at": datetime.datetime.now().isoformat(), "owner": owner,
         "cookie_expires": cookie_expires,
         "proxy": proxy,
@@ -362,6 +364,9 @@ def update_account(account_id: str, body: dict, auth: dict = Depends(require_aut
             acct["cookie_value"] = cval.strip()
             acct["account_id"] = ""
             acct["safe_id"] = ""
+            acct["safe_address"] = ""
+            acct["chain_id"] = 0
+            acct["chain_name"] = ""
             # Update user_id from cookie name
             if cname.strip().startswith("session_"):
                 acct["user_id"] = cname.strip()[len("session_"):]
@@ -422,9 +427,9 @@ def account_summary(account_id: str, auth: dict = Depends(require_auth)):
         summary = client.get_account_summary()
         accounts = load_accounts()
         acct = next((a for a in accounts if a["id"] == account_id and (auth.get("role", "user") == "admin" or a.get("owner") == auth["sub"])), None)
-        if acct and (acct.get("account_id") != summary.get("account_id") or acct.get("safe_id") != summary.get("safe_id")):
-            acct["account_id"] = summary.get("account_id", "")
-            acct["safe_id"] = summary.get("safe_id", "")
+        if acct and any(acct.get(k) != summary.get(k) for k in ("account_id", "safe_id", "safe_address", "chain_id", "chain_name")):
+            for key in ("account_id", "safe_id", "safe_address", "chain_id", "chain_name"):
+                acct[key] = summary.get(key, "" if key != "chain_id" else 0)
             save_accounts(accounts)
         with ThreadPoolExecutor(max_workers=2) as executor:
             details_future = executor.submit(client.get_safe_details)
@@ -580,7 +585,21 @@ def reveal_card(account_id: str, card_id: str, auth: dict = Depends(require_auth
 @app.get("/api/accounts/{account_id}/deposit")
 def deposit_info(account_id: str, auth: dict = Depends(require_auth)):
     try:
-        return get_client(account_id, auth["sub"], auth.get("role", "user")).get_deposit_info()
+        accounts = load_accounts()
+        role = auth.get("role", "user")
+        acct = next((a for a in accounts if a["id"] == account_id and (role == "admin" or a.get("owner") == auth["sub"])), None)
+        if not acct:
+            raise HTTPException(404, "Account not found")
+        summary = None
+        if acct.get("safe_address") and acct.get("chain_id"):
+            summary = {
+                "safe_address": acct.get("safe_address", ""),
+                "chain_id": acct.get("chain_id", 0),
+                "chain_name": acct.get("chain_name", ""),
+            }
+        return get_client(account_id, auth["sub"], role).get_deposit_info(summary=summary)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, str(e))
 

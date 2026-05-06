@@ -3,6 +3,7 @@ let accounts = [];
 let activeAccountId = null;
 let authToken = localStorage.getItem('dashboard_token') || '';
 let currentUser = { username: '', role: '' };
+let accountSummaryCache = {};
 
 // ─── API Helpers ────────────────────────────────────────────────────
 async function api(method, path, body = null) {
@@ -157,6 +158,7 @@ function logout() {
     localStorage.removeItem('dashboard_token');
     currentUser = { username: '', role: '' };
     activeAccountId = null;
+    accountSummaryCache = {};
     depositLoaded = {};
     txLoaded = {};
     showLoginScreen();
@@ -388,6 +390,8 @@ async function saveEditAccount(accountId) {
 
     try {
         await api('PATCH', `/api/accounts/${accountId}`, { label, cookie, proxy });
+        delete accountSummaryCache[accountId];
+        delete depositData[accountId];
         toast('账户已更新', 'success');
         hideModal('editAccountModal');
         // Reload to pick up any changes (especially cookie/id changes)
@@ -503,6 +507,7 @@ async function selectAccount(accountId, options = {}) {
             api('GET', `/api/accounts/${accountId}/cards`),
         ]);
         const { cards, slots } = normalizeCardsResponse(cardsResp);
+        accountSummaryCache[accountId] = summary;
         // Cache cards for tx detail lookup
         cards.forEach(c => { _cardsCache[c.id] = c; });
         renderDashboard(accountId, summary, cards, slots);
@@ -517,6 +522,8 @@ async function deleteAccount(accountId) {
     if (!(await showConfirm('确定要删除此账户吗？', '删除账户', true))) return;
     try {
         await api('DELETE', `/api/accounts/${accountId}`);
+        delete accountSummaryCache[accountId];
+        delete depositData[accountId];
         toast('账户已删除', 'success');
         if (activeAccountId === accountId) activeAccountId = null;
         await loadAccounts();
@@ -1580,7 +1587,8 @@ async function loadWithdraw(accountId) {
     if (withdrawLoaded[accountId]) return;
     const c = document.getElementById('tab-withdraw');
     try {
-        const summary = await api('GET', `/api/accounts/${accountId}/summary`);
+        const summary = accountSummaryCache[accountId] || await api('GET', `/api/accounts/${accountId}/summary`);
+        accountSummaryCache[accountId] = summary;
         const balances = summary.balances || [];
 
         if (balances.length === 0) {
@@ -1696,9 +1704,8 @@ async function submitWithdrawal(accountId) {
         toast('请输入有效的目标钱包地址 (0x...)', 'error'); return;
     }
 
-    // Get the selected token's details from the summary
-    const summary = await api('GET', `/api/accounts/${accountId}/summary`);
-    const balances = summary.balances || [];
+    // Reuse the balances already loaded for the withdraw tab.
+    const balances = window._wdBalances || accountSummaryCache[accountId]?.balances || [];
     const idx = parseInt(tokenSelect.value);
     const token = balances[idx];
     if (!token) { toast('未找到选中的资产', 'error'); return; }
@@ -1759,6 +1766,7 @@ async function verifyWithdrawalOTP(accountId) {
         withdrawLoaded = {};
         try {
             const summary = await api('GET', `/api/accounts/${accountId}/summary`);
+            accountSummaryCache[accountId] = summary;
             const balEl = document.querySelector('.stat-value');
             if (balEl) balEl.textContent = `$${fmt(summary.total_balance || 0)}`;
         } catch (_) {}
