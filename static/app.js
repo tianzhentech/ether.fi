@@ -769,6 +769,21 @@ async function deleteCardConfirm(accountId, cardId, last4) {
 // ─── Deposit & Transactions ─────────────────────────────────────────
 let depositData = {}; // per-account cache
 let depositLoaded = {}, txLoaded = {};
+let preloadedChainIcons = new Set();
+
+function preloadChainIcons(info) {
+    const chainIds = new Set();
+    (info.tokens || []).forEach(token => {
+        (token.networks || []).forEach(network => chainIds.add(network.chain_id));
+    });
+    chainIds.forEach(chainId => {
+        if (preloadedChainIcons.has(chainId)) return;
+        preloadedChainIcons.add(chainId);
+        const img = new Image();
+        img.src = `/icons/chain_${chainId}.jpg`;
+        if (img.decode) img.decode().catch(() => {});
+    });
+}
 
 async function loadDeposit(accountId) {
     if (depositLoaded[accountId]) return;
@@ -776,6 +791,7 @@ async function loadDeposit(accountId) {
     try {
         const info = await api('GET', `/api/accounts/${accountId}/deposit`);
         depositData[accountId] = info;
+        preloadChainIcons(info);
         depositLoaded[accountId] = true;
         renderDepositUI(accountId, info);
     } catch (e) { c.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`; }
