@@ -215,7 +215,7 @@ async function createUser() {
 }
 
 async function deleteUser(username) {
-    if (!confirm(`确定要删除用户 ${username} 吗？`)) return;
+    if (!(await showConfirm(`确定要删除用户 <b>${username}</b> 吗？`, '删除用户', true))) return;
     try {
         await api('DELETE', `/api/users/${username}`);
         toast(`用户 ${username} 已删除`, 'success');
@@ -391,6 +391,39 @@ async function saveEditAccount(accountId) {
     }
 }
 
+// ─── Custom Confirm Dialog ───────────────────────────────────────
+function showConfirm(message, title = '提示', isDanger = false) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal" style="max-width: 360px; text-align: center; padding: 32px 24px;">
+                <div style="font-size: 36px; margin-bottom: 16px;">${isDanger ? '⚠️' : '❓'}</div>
+                <h3 style="margin-bottom: 12px; font-size: 18px;">${title}</h3>
+                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.6;">${message}</div>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button class="btn" id="btnConfirmCancel" style="flex: 1">取消</button>
+                    <button class="btn ${isDanger ? 'btn-danger' : 'btn-primary'}" id="btnConfirmOk" style="flex: 1">确定</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        // force reflow to trigger transition
+        overlay.offsetHeight;
+        overlay.classList.add('show');
+
+        const close = (result) => {
+            overlay.classList.remove('show');
+            setTimeout(() => overlay.remove(), 300);
+            resolve(result);
+        };
+
+        overlay.querySelector('#btnConfirmCancel').onclick = () => close(false);
+        overlay.querySelector('#btnConfirmOk').onclick = () => close(true);
+    });
+}
+
 let _sessionTimers = {};
 
 async function loadSessionStatus(accountId) {
@@ -474,7 +507,7 @@ async function selectAccount(accountId, options = {}) {
 }
 
 async function deleteAccount(accountId) {
-    if (!confirm('确定要删除此账户吗？')) return;
+    if (!(await showConfirm('确定要删除此账户吗？', '删除账户', true))) return;
     try {
         await api('DELETE', `/api/accounts/${accountId}`);
         toast('账户已删除', 'success');
@@ -699,7 +732,7 @@ function _updateSlotCountdowns() {
 }
 
 async function createCard(accountId) {
-    if (!confirm('确定要创建一张新的虚拟卡片吗？')) return;
+    if (!(await showConfirm('确定要创建一张新的虚拟卡片吗？', '创建卡片'))) return;
     try {
         toast('创建中...', 'info');
         await api('POST', `/api/accounts/${accountId}/cards/create`);
@@ -711,7 +744,7 @@ async function createCard(accountId) {
 }
 
 async function deleteCardConfirm(accountId, cardId, last4) {
-    if (!confirm(`确定删除卡片 **** ${last4} 吗？\n\n⚠️ 删除后需等待 30 天才能创建新卡片！`)) return;
+    if (!(await showConfirm(`确定删除卡片 **** ${last4} 吗？<br><br><span style="color:var(--warning)">⚠️ 删除后需等待 30 天才能创建新卡片！</span>`, '删除卡片', true))) return;
     try {
         await api('DELETE', `/api/accounts/${accountId}/cards/${cardId}`);
         toast('卡片已删除', 'success');
