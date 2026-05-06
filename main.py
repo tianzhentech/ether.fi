@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import jwt
@@ -111,7 +112,10 @@ def get_client(account_id: str, username: str, role: str) -> EtherFiClient:
     # Access control: non-admin can only access their own
     if role != "admin" and acct.get("owner") != username:
         raise HTTPException(403, "无权访问此账户")
-    return EtherFiClient(acct["cookie_name"], acct["cookie_value"], proxy=acct.get("proxy", ""))
+    client = EtherFiClient(acct["cookie_name"], acct["cookie_value"], proxy=acct.get("proxy", ""))
+    client._account_id = acct.get("account_id") or None
+    client._safe_id = acct.get("safe_id") or None
+    return client
 
 
 # ─── Auth ─────────────────────────────────────────────────────────────
@@ -305,6 +309,7 @@ def add_account(body: dict, auth: dict = Depends(require_auth)):
         "id": summary["user_id"], "cookie_name": cookie_name, "cookie_value": cookie_value,
         "label": label or summary.get("email", ""), "email": summary.get("email", ""),
         "name": summary.get("name", ""), "user_id": summary.get("user_id", ""),
+        "account_id": summary.get("account_id", ""), "safe_id": summary.get("safe_id", ""),
         "added_at": datetime.datetime.now().isoformat(), "owner": owner,
         "cookie_expires": cookie_expires,
         "proxy": proxy,
@@ -355,6 +360,8 @@ def update_account(account_id: str, body: dict, auth: dict = Depends(require_aut
             cname, _, cval = raw.partition("=")
             acct["cookie_name"] = cname.strip()
             acct["cookie_value"] = cval.strip()
+            acct["account_id"] = ""
+            acct["safe_id"] = ""
             # Update user_id from cookie name
             if cname.strip().startswith("session_"):
                 acct["user_id"] = cname.strip()[len("session_"):]
@@ -412,7 +419,19 @@ def session_status(account_id: str, auth: dict = Depends(require_auth)):
 def account_summary(account_id: str, auth: dict = Depends(require_auth)):
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
     try:
-        return {**client.get_account_summary(), **client.get_balances()}
+        summary = client.get_account_summary()
+        accounts = load_accounts()
+        acct = next((a for a in accounts if a["id"] == account_id and (auth.get("role", "user") == "admin" or a.get("owner") == auth["sub"])), None)
+        if acct and (acct.get("account_id") != summary.get("account_id") or acct.get("safe_id") != summary.get("safe_id")):
+            acct["account_id"] = summary.get("account_id", "")
+            acct["safe_id"] = summary.get("safe_id", "")
+            save_accounts(accounts)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            details_future = executor.submit(client.get_safe_details)
+            assets_future = executor.submit(client.get_assets)
+            details = details_future.result()
+            assets_config = assets_future.result()
+        return {**summary, **client.get_balances(details=details, assets_config=assets_config, summary=summary)}
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -439,7 +458,8 @@ _card_cache: dict = _load_cards_cache()
 def account_cards(account_id: str, auth: dict = Depends(require_auth)):
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
     try:
-        cards = client.get_cards()
+        cards_data = client.get_cards_data()
+        cards = cards_data["cards"]
         cache = _card_cache.setdefault(account_id, {})
         dirty = False
 
@@ -476,7 +496,7 @@ def account_cards(account_id: str, auth: dict = Depends(require_auth)):
         if dirty:
             _save_cards_cache(_card_cache)
 
-        return cards
+        return {"cards": cards, "slots": cards_data["slots"]}
     except Exception as e:
         raise HTTPException(500, str(e))
 

@@ -115,6 +115,8 @@ class EtherFiClient:
         me = self.get_user_info()
         acct = me.get("personalAccounts", [{}])[0]
         safe = acct.get("safe", {})
+        self._account_id = acct.get("id", "") or self._account_id
+        self._safe_id = safe.get("id", "") or self._safe_id
 
         # Build billing address in 3 lines (matching official layout)
         line1 = me.get("addressLine1", "")
@@ -155,16 +157,19 @@ class EtherFiClient:
 
     # ─── Cards ──────────────────────────────────────────────────────────
 
-    def get_cards(self) -> list[dict]:
-        resp = self.session.get(
-            f"{BASE_URL}/v2/cards/{self.account_id}/user-cards",
-            headers=self._headers(),
-        )
-        resp.raise_for_status()
-        return resp.json().get("data", {}).get("accountUserCards", [])
+    @staticmethod
+    def _card_slots_from_data(data: dict) -> dict:
+        cards = data.get("accountUserCards", [])
+        return {
+            "maxVirtual": data.get("maxVirtualCardCount", 3),
+            "virtualLeft": data.get("virtualCardsLeft", 0),
+            "virtualCoolDown": data.get("virtualCardsOnDeleteCoolDown", 0),
+            "nextCreateDate": data.get("nextPossibleVirtualCardCreationDate"),
+            "activeCards": len(cards),
+            "deletedCards": data.get("deletedAccountUserCards", []),
+        }
 
-    def get_card_slots(self) -> dict:
-        """Get card slot info: how many cards left, cooldown status, etc."""
+    def get_cards_data(self) -> dict:
         resp = self.session.get(
             f"{BASE_URL}/v2/cards/{self.account_id}/user-cards",
             headers=self._headers(),
@@ -172,13 +177,16 @@ class EtherFiClient:
         resp.raise_for_status()
         data = resp.json().get("data", {})
         return {
-            "maxVirtual": data.get("maxVirtualCardCount", 3),
-            "virtualLeft": data.get("virtualCardsLeft", 0),
-            "virtualCoolDown": data.get("virtualCardsOnDeleteCoolDown", 0),
-            "nextCreateDate": data.get("nextPossibleVirtualCardCreationDate"),
-            "activeCards": len(data.get("accountUserCards", [])),
-            "deletedCards": data.get("deletedAccountUserCards", []),
+            "cards": data.get("accountUserCards", []),
+            "slots": self._card_slots_from_data(data),
         }
+
+    def get_cards(self) -> list[dict]:
+        return self.get_cards_data()["cards"]
+
+    def get_card_slots(self) -> dict:
+        """Get card slot info: how many cards left, cooldown status, etc."""
+        return self.get_cards_data()["slots"]
 
     def create_card(self, card_type: str = "Virtual") -> dict:
         """Create a new virtual or physical card.
@@ -409,11 +417,11 @@ class EtherFiClient:
         resp.raise_for_status()
         return resp.json().get("data", {})
 
-    def get_balances(self) -> dict:
+    def get_balances(self, details: dict | None = None, assets_config: dict | None = None, summary: dict | None = None) -> dict:
         """Get resolved balances with token symbols and spending limits."""
-        details = self.get_safe_details()
-        assets_config = self.get_assets()
-        summary = self.get_account_summary()
+        details = details if details is not None else self.get_safe_details()
+        assets_config = assets_config if assets_config is not None else self.get_assets()
+        summary = summary if summary is not None else self.get_account_summary()
         chain_id = summary["chain_id"]
 
         # Build token address -> symbol/decimals/icon map from asset config

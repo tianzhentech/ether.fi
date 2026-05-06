@@ -86,6 +86,13 @@ function renderSidebarUserLoading() {
     document.getElementById('userMgmtBtn').style.display = 'none';
 }
 
+function normalizeCardsResponse(resp) {
+    if (Array.isArray(resp)) {
+        return { cards: resp, slots: null };
+    }
+    return { cards: resp.cards || [], slots: resp.slots || null };
+}
+
 function updateSidebarUserInfo() {
     const info = document.getElementById('sidebarUserInfo');
     if (!currentUser.username) {
@@ -491,11 +498,11 @@ async function selectAccount(accountId, options = {}) {
     const main = document.getElementById('mainContent');
 
     try {
-        const [summary, cards, slots] = await Promise.all([
+        const [summary, cardsResp] = await Promise.all([
             api('GET', `/api/accounts/${accountId}/summary`),
             api('GET', `/api/accounts/${accountId}/cards`),
-            api('GET', `/api/accounts/${accountId}/card-slots`),
         ]);
+        const { cards, slots } = normalizeCardsResponse(cardsResp);
         // Cache cards for tx detail lookup
         cards.forEach(c => { _cardsCache[c.id] = c; });
         renderDashboard(accountId, summary, cards, slots);
@@ -656,10 +663,8 @@ async function toggleFreeze(accountId, cardId, frozen) {
 
 async function reloadCards(accountId) {
     try {
-        const [cards, slots] = await Promise.all([
-            api('GET', `/api/accounts/${accountId}/cards`),
-            api('GET', `/api/accounts/${accountId}/card-slots`),
-        ]);
+        const cardsResp = await api('GET', `/api/accounts/${accountId}/cards`);
+        const { cards, slots } = normalizeCardsResponse(cardsResp);
         const grid = document.getElementById('cardsGrid');
         if (grid) {
             grid.innerHTML = cards.map(c => renderCardHTML(accountId, c)).join('') + generateSlotsHTML(accountId, slots);
