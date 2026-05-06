@@ -8,6 +8,7 @@ __pycache__/
 cookie/
 accounts.json
 users.json
+cards_cache.json
 .env
 
 # Cached/generated files

@@ -459,8 +459,8 @@ function renderDashboard(accountId, summary, cards) {
         </div>
         <div class="tabs">
             <button class="tab active" onclick="switchTab('cards',this)">💳 卡片管理</button>
-            <button class="tab" onclick="switchTab('deposit',this)">📥 充值入金</button>
-            <button class="tab" onclick="switchTab('withdraw',this)">📤 提现</button>
+            <button class="tab" onclick="switchTab('deposit',this)">💰 充值入金</button>
+            <button class="tab" onclick="switchTab('withdraw',this)">🏧 提现</button>
             <button class="tab" onclick="switchTab('transactions',this)">📜 消费记录</button>
         </div>
         <div id="tab-cards" class="tab-content active">
@@ -513,9 +513,8 @@ function renderCardHTML(accountId, card) {
             </div>
             <div class="card-holder-row">
                 <span class="card-holder">${card.cardName}</span>
-                <span class="card-limit-pill">
-                    💰 <strong id="limitVal-${card.id}">${limitDisplay}</strong>
-                    <button class="btn-limit-edit" onclick="showEditLimitModal('${accountId}','${card.id}', ${limit !== null && limit !== undefined ? limit : 'null'})" title="修改日限额">✏️</button>
+                <span class="card-limit-pill clickable" onclick="showEditLimitModal('${accountId}','${card.id}', ${limit !== null && limit !== undefined ? limit : 'null'})" title="点击修改日限额">
+                    每日限额 <strong id="limitVal-${card.id}">${limitDisplay}</strong>
                 </span>
             </div>
             <div class="card-actions">

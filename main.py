@@ -396,8 +396,24 @@ async def account_summary(account_id: str, auth: dict = Depends(require_auth)):
     except Exception as e:
         raise HTTPException(500, str(e))
 
+CARDS_CACHE_FILE = APP_DIR / "cards_cache.json"
 
-_card_cache: dict = {}  # account_id -> {card_id: {pan, cvc, exp}}
+
+def _load_cards_cache() -> dict:
+    if CARDS_CACHE_FILE.exists():
+        try:
+            return json.loads(CARDS_CACHE_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _save_cards_cache(cache: dict):
+    CARDS_CACHE_FILE.write_text(json.dumps(cache, indent=2, ensure_ascii=False))
+
+
+_card_cache: dict = _load_cards_cache()
+
 
 @app.get("/api/accounts/{account_id}/cards")
 async def account_cards(account_id: str, auth: dict = Depends(require_auth)):
@@ -405,6 +421,7 @@ async def account_cards(account_id: str, auth: dict = Depends(require_auth)):
     try:
         cards = client.get_cards()
         cache = _card_cache.setdefault(account_id, {})
+        dirty = False
 
         for card in cards:
             cid = card["id"]
@@ -426,6 +443,7 @@ async def account_cards(account_id: str, auth: dict = Depends(require_auth)):
                     }
                     cache[cid] = decrypted
                     card.update(decrypted)
+                    dirty = True
             except Exception as e:
                 print(f"[Card Decrypt] {cid} failed: {e}")
             finally:
@@ -434,6 +452,9 @@ async def account_cards(account_id: str, auth: dict = Depends(require_auth)):
                         client.freeze_card(cid, freeze=True)
                     except Exception:
                         pass
+
+        if dirty:
+            _save_cards_cache(_card_cache)
 
         return cards
     except Exception as e:
