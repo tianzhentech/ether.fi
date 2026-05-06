@@ -267,6 +267,7 @@ async function loadAccounts() {
         if (accounts.length > 0 && !activeAccountId) {
             activeAccountId = accounts[0].id;
             renderAccountList();
+            checkAllSessions();
             selectAccount(accounts[0].id, { renderList: false });
         } else if (accounts.length === 0) {
             activeAccountId = null;
@@ -280,6 +281,7 @@ async function loadAccounts() {
                 </div>`;
         } else {
             renderAccountList();
+            checkAllSessions();
         }
     } catch (e) { /* auth errors handled in api() */ }
 }
@@ -288,6 +290,9 @@ function renderAccountList() {
     document.getElementById('accountList').innerHTML = accounts.map(a => {
         const hasCustomLabel = a.label && a.label !== a.email && a.label !== a.name;
         const displayName = a.label || a.name || a.email;
+        // Preserve existing session status text if available
+        const existingEl = document.getElementById(`session-${a.id}`);
+        const sessionHtml = existingEl ? existingEl.innerHTML : '⏳ 检查中...';
         return `
         <div class="account-item ${a.id === activeAccountId ? 'active' : ''}"
              onclick="selectAccount('${a.id}')">
@@ -296,10 +301,12 @@ function renderAccountList() {
                 <button class="btn-rename" onclick="event.stopPropagation(); startRenameAccount('${a.id}')" title="修改备注">✏️</button>
             </div>
             ${hasCustomLabel ? `<div class="account-email">${a.email}</div>` : ''}
-            <div class="account-session" id="session-${a.id}">⏳ 检查中...</div>
+            <div class="account-session" id="session-${a.id}">${sessionHtml}</div>
         </div>`;
     }).join('');
-    // Fetch session status for each account
+}
+
+function checkAllSessions() {
     accounts.forEach(a => loadSessionStatus(a.id));
 }
 
