@@ -198,11 +198,15 @@ async function refreshUserList() {
         const users = await api('GET', '/api/users');
         container.innerHTML = users.map(u => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;background:var(--bg-card)">
-                <div>
+                <div style="display:flex;align-items:center;gap:10px;min-width:0">
                     <span style="font-weight:600;font-size:13px">${u.username}</span>
                     <span style="font-size:10px;margin-left:8px;padding:2px 6px;border-radius:4px;background:${u.role === 'admin' ? 'var(--accent)' : 'var(--bg-glass)'};color:${u.role === 'admin' ? 'white' : 'var(--text-secondary)'}">${u.role.toUpperCase()}</span>
                 </div>
-                <div style="display:flex;gap:6px">
+                <div style="display:flex;gap:6px;align-items:center">
+                    <select class="form-control" style="width:92px;padding:6px 8px;font-size:12px" onchange='updateUserRole(${JSON.stringify(u.username)}, this.value, ${JSON.stringify(u.role)})' ${u.username === currentUser.username ? 'disabled title="不能修改自己的角色"' : ''}>
+                        <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
+                        <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+                    </select>
                     <button class="btn btn-sm" onclick="promptResetPassword('${u.username}')" title="重置密码">🔑</button>
                     ${u.username !== 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')" title="删除">✕</button>` : ''}
                 </div>
@@ -210,6 +214,18 @@ async function refreshUserList() {
         `).join('');
     } catch (e) {
         container.innerHTML = `<div style="color:var(--danger);font-size:13px">${e.message}</div>`;
+    }
+}
+
+async function updateUserRole(username, role, previousRole) {
+    if (role === previousRole) return;
+    try {
+        await api('PUT', `/api/users/${encodeURIComponent(username)}/role`, { role });
+        toast(`${username} 已设为 ${role}`, 'success');
+        await refreshUserList();
+    } catch (e) {
+        toast(e.message, 'error');
+        await refreshUserList();
     }
 }
 

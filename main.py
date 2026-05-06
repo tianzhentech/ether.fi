@@ -250,6 +250,30 @@ async def reset_password(username: str, request: Request):
     return {"ok": True}
 
 
+@app.put("/api/users/{username}/role")
+async def update_user_role(username: str, request: Request, auth: dict = Depends(require_admin)):
+    body = await request.json()
+    role = body.get("role", "")
+    if role not in ("admin", "user"):
+        raise HTTPException(400, "角色必须是 admin 或 user")
+    if username == auth["sub"]:
+        raise HTTPException(400, "不能修改自己的角色")
+
+    users = load_users()
+    user = next((u for u in users if u["username"] == username), None)
+    if not user:
+        raise HTTPException(404, "用户不存在")
+
+    if user.get("role") == "admin" and role != "admin":
+        admin_count = sum(1 for u in users if u.get("role") == "admin")
+        if admin_count <= 1:
+            raise HTTPException(400, "至少需要保留一个管理员")
+
+    user["role"] = role
+    save_users(users)
+    return {"ok": True, "username": username, "role": role}
+
+
 # ─── Protected API Routes ───────────────────────────────────────────
 
 @app.get("/api/accounts")
