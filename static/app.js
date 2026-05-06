@@ -565,8 +565,8 @@ async function loadDeposit(accountId) {
 }
 
 function getTokenIconUrl(token) {
-    if (token.icon_svg) return `/api/icon/token/${token.icon_svg.replace('/app/cash/images/tokens/', '')}`;
-    if (token.icon_png) return `/api/icon/token/${token.icon_png.replace('/app/cash/images/tokens/', '')}`;
+    if (token.icon_svg) return `/icons/token_${token.icon_svg.replace('/app/cash/images/tokens/', '').replace('/', '_')}`;
+    if (token.icon_png) return `/icons/token_${token.icon_png.replace('/app/cash/images/tokens/', '').replace('/', '_')}`;
     return '';
 }
 
@@ -646,7 +646,7 @@ function selectToken(accountId, symbol) {
     const networkList = document.getElementById('networkList');
     networkList.innerHTML = token.networks.map(n => `
         <div class="network-option" onclick="onNetworkSelect('${accountId}', '${symbol}', ${n.chain_id}, this)">
-            <img class="network-icon-img" src="/api/icon/chain/${n.chain_id}" alt="${n.chain_name}"
+            <img class="network-icon-img" src="/icons/chain_${n.chain_id}.jpg" alt="${n.chain_name}"
                  onerror="this.outerHTML='<span class=\\'network-icon-fallback\\'>🔗</span>'">
             <span class="network-name">${n.chain_name}</span>
         </div>

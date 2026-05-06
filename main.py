@@ -828,6 +828,7 @@ async def proxy_chain_icon(chain_id: int):
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
+app.mount("/icons", StaticFiles(directory=str(ICON_CACHE_DIR)), name="icons")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
