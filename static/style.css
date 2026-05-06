@@ -538,6 +538,71 @@ body {
     border-top: 1px solid var(--border);
 }
 
+/* ─── Empty Card Slots ─────────────────────────────────────── */
+
+.card-slot-empty {
+    background: transparent;
+    border: 2px dashed rgba(255, 255, 255, 0.1);
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-slot-empty::before { display: none; }
+
+.card-slot-empty:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.slot-empty-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+}
+
+.slot-empty-inner .slot-icon {
+    font-size: 36px;
+    line-height: 1;
+}
+
+.slot-empty-inner .slot-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.slot-empty-inner .slot-countdown {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--warning);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.slot-available {
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 20px;
+    border-radius: 12px;
+}
+
+.slot-available:hover .slot-icon {
+    color: var(--accent);
+    transform: scale(1.15);
+    transition: all 0.2s;
+}
+
+.slot-available:hover .slot-label {
+    color: var(--accent);
+}
+
+.slot-cooldown .slot-icon {
+    opacity: 0.5;
+}
+
 /* ─── Vault Limit Stats ─────────────────────────────────────── */
 
 .vault-limit-card { position: relative; }

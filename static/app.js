@@ -458,14 +458,15 @@ async function selectAccount(accountId, options = {}) {
     const main = document.getElementById('mainContent');
 
     try {
-        const [summary, cards] = await Promise.all([
+        const [summary, cards, slots] = await Promise.all([
             api('GET', `/api/accounts/${accountId}/summary`),
             api('GET', `/api/accounts/${accountId}/cards`),
+            api('GET', `/api/accounts/${accountId}/card-slots`),
         ]);
         // Cache cards for tx detail lookup
         cards.forEach(c => { _cardsCache[c.id] = c; });
-        renderDashboard(accountId, summary, cards);
-        loadCardSlots(accountId);
+        renderDashboard(accountId, summary, cards, slots);
+        _updateSlotCountdowns();
     } catch (e) {
         main.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h3>加载失败</h3><p>${e.message}</p>
             <button class="btn btn-danger" onclick="deleteAccount('${accountId}')">删除此账户</button></div>`;
@@ -483,7 +484,7 @@ async function deleteAccount(accountId) {
 }
 
 // ─── Dashboard Render ───────────────────────────────────────────────
-function renderDashboard(accountId, summary, cards) {
+function renderDashboard(accountId, summary, cards, slots = null) {
     document.getElementById('mainContent').innerHTML = `
         <div class="section">
             <div class="section-title" style="justify-content:space-between">
@@ -540,11 +541,10 @@ function renderDashboard(accountId, summary, cards) {
             <button class="tab" onclick="switchTab('transactions',this)">📜 消费记录</button>
         </div>
         <div id="tab-cards" class="tab-content active">
-            <div id="cardSlotsBar" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px">
-                <span id="cardSlotsInfo" style="color:var(--text-muted)">加载卡槽信息...</span>
-                <button class="btn btn-primary btn-sm" id="createCardBtn" onclick="createCard('${accountId}')" style="display:none;margin-left:auto">+ 创建卡片</button>
+            <div class="cards-grid" id="cardsGrid">
+                ${cards.map(c => renderCardHTML(accountId, c)).join('')}
+                ${generateSlotsHTML(accountId, slots)}
             </div>
-            <div class="cards-grid" id="cardsGrid">${cards.map(c => renderCardHTML(accountId, c)).join('')}</div>
         </div>
         <div id="tab-deposit" class="tab-content"><div class="loading"><div class="spinner"></div>加载中...</div></div>
         <div id="tab-withdraw" class="tab-content"><div class="loading"><div class="spinner"></div>加载中...</div></div>
@@ -623,62 +623,90 @@ async function toggleFreeze(accountId, cardId, frozen) {
 
 async function reloadCards(accountId) {
     try {
-        const cards = await api('GET', `/api/accounts/${accountId}/cards`);
+        const [cards, slots] = await Promise.all([
+            api('GET', `/api/accounts/${accountId}/cards`),
+            api('GET', `/api/accounts/${accountId}/card-slots`),
+        ]);
         const grid = document.getElementById('cardsGrid');
-        if (grid) grid.innerHTML = cards.map(c => renderCardHTML(accountId, c)).join('');
+        if (grid) {
+            grid.innerHTML = cards.map(c => renderCardHTML(accountId, c)).join('') + generateSlotsHTML(accountId, slots);
+            _updateSlotCountdowns();
+        }
         // Update card stats
         const countEl = document.getElementById('cardCount');
         const subEl = document.getElementById('cardStatsSub');
         if (countEl) countEl.textContent = cards.length;
         if (subEl) subEl.textContent = `${cards.filter(c=>c.status==='ACTIVE').length} 活跃 · ${cards.filter(c=>c.status==='FROZEN').length} 冻结`;
-        // Refresh slot info
-        loadCardSlots(accountId);
     } catch (e) { console.error('reloadCards failed:', e); }
 }
+function generateSlotsHTML(accountId, slots) {
+    if (!slots) return '';
+    const max = slots.maxVirtual;
+    const active = slots.activeCards;
+    const emptyCount = max - active;
+    const coolDown = slots.virtualCoolDown;
+    const nextDate = slots.nextCreateDate;
 
-async function loadCardSlots(accountId) {
-    try {
-        const slots = await api('GET', `/api/accounts/${accountId}/card-slots`);
-        const info = document.getElementById('cardSlotsInfo');
-        const btn = document.getElementById('createCardBtn');
-        if (!info) return;
-
-        const active = slots.activeCards;
-        const max = slots.maxVirtual;
-        const left = slots.virtualLeft;
-        const coolDown = slots.virtualCoolDown;
-        const nextDate = slots.nextCreateDate;
-
-        let text = `卡槽 ${active}/${max}`;
-        if (coolDown > 0 && nextDate) {
-            const d = new Date(nextDate);
-            text += ` · ⏳ ${coolDown} 张冷却中 (${d.getMonth()+1}/${d.getDate()} 可创建)`;
+    let html = '';
+    for (let i = 0; i < emptyCount; i++) {
+        const isCoolDown = i < coolDown;
+        if (isCoolDown && nextDate) {
+            const target = new Date(nextDate).getTime();
+            html += `
+                <div class="card-slot-empty credit-card">
+                    <div class="slot-empty-inner slot-cooldown">
+                        <div class="slot-icon">⏳</div>
+                        <div class="slot-label">冷却中</div>
+                        <div class="slot-countdown" data-target="${target}"></div>
+                    </div>
+                </div>`;
+        } else {
+            html += `
+                <div class="card-slot-empty credit-card">
+                    <div class="slot-empty-inner slot-available" onclick="createCard('${accountId}')">
+                        <div class="slot-icon">＋</div>
+                        <div class="slot-label">创建卡片</div>
+                    </div>
+                </div>`;
         }
-        if (left > 0) {
-            text += ` · ✅ 可创建 ${left} 张`;
-        }
-        info.textContent = text;
-
-        if (btn) {
-            btn.style.display = left > 0 ? '' : 'none';
-        }
-    } catch (e) {
-        console.error('loadCardSlots failed:', e);
     }
+    return html;
+}
+
+let _slotCountdownTimer = null;
+function _updateSlotCountdowns() {
+    if (_slotCountdownTimer) clearInterval(_slotCountdownTimer);
+    const tick = () => {
+        document.querySelectorAll('.slot-countdown[data-target]').forEach(el => {
+            const target = parseInt(el.dataset.target);
+            const diff = target - Date.now();
+            if (diff <= 0) {
+                el.textContent = '可创建';
+                return;
+            }
+            const days = Math.floor(diff / 86400000);
+            const hours = Math.floor((diff % 86400000) / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            if (days > 0) {
+                el.textContent = `${days}天${hours}小时`;
+            } else {
+                el.textContent = `${hours}时${mins}分`;
+            }
+        });
+    };
+    tick();
+    _slotCountdownTimer = setInterval(tick, 60000);
 }
 
 async function createCard(accountId) {
     if (!confirm('确定要创建一张新的虚拟卡片吗？')) return;
-    const btn = document.getElementById('createCardBtn');
-    if (btn) { btn.textContent = '创建中...'; btn.disabled = true; }
     try {
+        toast('创建中...', 'info');
         await api('POST', `/api/accounts/${accountId}/cards/create`);
         toast('卡片创建成功', 'success');
         await reloadCards(accountId);
     } catch (e) {
         toast(e.message, 'error');
-    } finally {
-        if (btn) { btn.textContent = '+ 创建卡片'; btn.disabled = false; }
     }
 }
 
