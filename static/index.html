@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ether.fi Cash Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- Login Screen -->
+<div class="login-screen" id="loginScreen">
+    <div class="login-card">
+        <div class="login-header">
+            <h1>ether.fi Cash</h1>
+            <p>管理后台</p>
+        </div>
+        <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="loginUsername" placeholder="请输入用户名" autocomplete="username">
+        </div>
+        <div class="form-group">
+            <label>密码</label>
+            <input type="password" id="loginPassword" placeholder="请输入密码" autocomplete="current-password">
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登录</button>
+    </div>
+</div>
+
+<!-- App Container -->
+<div class="app" id="appContainer" style="display:none">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1>ether.fi Cash</h1>
+            <p>多账户管理后台</p>
+        </div>
+        <div class="sidebar-accounts" id="accountList"></div>
+        <div class="sidebar-footer">
+            <button class="btn btn-primary btn-full" onclick="showAddAccountModal()" style="margin-bottom:6px">
+                + 添加账户
+            </button>
+            <button class="btn btn-full" id="userMgmtBtn" onclick="showUserManagement()" style="margin-bottom:6px;display:none">
+                👥 用户管理
+            </button>
+            <div class="sidebar-user-info" id="sidebarUserInfo"></div>
+        </div>
+    </aside>
+
+    <main class="main-content" id="mainContent">
+        <div class="empty-state">
+            <div class="icon">💳</div>
+            <h3>开始使用</h3>
+            <p>添加 ether.fi Cash 账户以管理您的虚拟信用卡。</p>
+            <button class="btn btn-primary" onclick="showAddAccountModal()">添加账户</button>
+        </div>
+    </main>
+</div>
+
+<!-- Add Account Modal -->
+<div class="modal-overlay" id="addAccountModal">
+    <div class="modal">
+        <h2>添加账户</h2>
+        <div class="form-group">
+            <label>Session Cookie</label>
+            <textarea id="sessionCookieInput" placeholder="session_b075400a-xxxx=cc0bbadd-xxxx&#10;&#10;格式: session_{userId}={sessionValue}"></textarea>
+        </div>
+        <div class="form-group">
+            <label>备注 (可选)</label>
+            <input type="text" id="accountLabel" placeholder="e.g. 主账户">
+        </div>
+        <div class="form-actions">
+            <button class="btn" onclick="hideModal('addAccountModal')">取消</button>
+            <button class="btn btn-primary" onclick="addAccount()" id="addAccountBtn">添加</button>
+        </div>
+    </div>
+</div>
+
+<!-- User Management Modal -->
+<div class="modal-overlay" id="userMgmtModal">
+    <div class="modal" style="max-width:520px">
+        <h2>👥 用户管理</h2>
+        <div id="userList" style="margin-bottom:20px"></div>
+        <div style="border-top:1px solid var(--border);padding-top:16px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:12px">添加新用户</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0">
+                    <label>用户名</label>
+                    <input type="text" id="newUsername" placeholder="用户名">
+                </div>
+                <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0">
+                    <label>密码</label>
+                    <input type="password" id="newUserPassword" placeholder="密码">
+                </div>
+                <div class="form-group" style="width:100px;margin-bottom:0">
+                    <label>角色</label>
+                    <select id="newUserRole" style="width:100%;padding:10px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-primary);font-size:13px;outline:none">
+                        <option value="user">user</option>
+                        <option value="admin">admin</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="createUser()" style="height:38px">添加</button>
+            </div>
+        </div>
+        <div class="form-actions" style="margin-top:16px">
+            <button class="btn" onclick="hideModal('userMgmtModal')">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
