@@ -163,6 +163,45 @@ class EtherFiClient:
         resp.raise_for_status()
         return resp.json().get("data", {}).get("accountUserCards", [])
 
+    def get_card_slots(self) -> dict:
+        """Get card slot info: how many cards left, cooldown status, etc."""
+        resp = self.session.get(
+            f"{BASE_URL}/v2/cards/{self.account_id}/user-cards",
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data", {})
+        return {
+            "maxVirtual": data.get("maxVirtualCardCount", 3),
+            "virtualLeft": data.get("virtualCardsLeft", 0),
+            "virtualCoolDown": data.get("virtualCardsOnDeleteCoolDown", 0),
+            "nextCreateDate": data.get("nextPossibleVirtualCardCreationDate"),
+            "activeCards": len(data.get("accountUserCards", [])),
+            "deletedCards": data.get("deletedAccountUserCards", []),
+        }
+
+    def create_card(self, card_type: str = "Virtual") -> dict:
+        """Create a new virtual or physical card.
+        
+        card_type: "Virtual" or "Physical"
+        """
+        resp = self.session.post(
+            f"{BASE_URL}/v3/cards/add-card/personal/{self.account_id}",
+            json={"type": card_type},
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def delete_card(self, card_id: str) -> dict:
+        """Delete a card. Triggers a 30-day cooldown before a new card can be created."""
+        resp = self.session.delete(
+            f"{BASE_URL}/v2/cards/{self.account_id}/card/{card_id}",
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def get_bin_sponsor(self, card_id: str) -> str:
         resp = self.session.get(
             f"{BASE_URL}/v2/cards/{self.account_id}/card/{card_id}/bin-sponsor",

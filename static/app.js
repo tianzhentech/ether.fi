@@ -465,6 +465,7 @@ async function selectAccount(accountId, options = {}) {
         // Cache cards for tx detail lookup
         cards.forEach(c => { _cardsCache[c.id] = c; });
         renderDashboard(accountId, summary, cards);
+        loadCardSlots(accountId);
     } catch (e) {
         main.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h3>加载失败</h3><p>${e.message}</p>
             <button class="btn btn-danger" onclick="deleteAccount('${accountId}')">删除此账户</button></div>`;
@@ -539,6 +540,10 @@ function renderDashboard(accountId, summary, cards) {
             <button class="tab" onclick="switchTab('transactions',this)">📜 消费记录</button>
         </div>
         <div id="tab-cards" class="tab-content active">
+            <div id="cardSlotsBar" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px">
+                <span id="cardSlotsInfo" style="color:var(--text-muted)">加载卡槽信息...</span>
+                <button class="btn btn-primary btn-sm" id="createCardBtn" onclick="createCard('${accountId}')" style="display:none;margin-left:auto">+ 创建卡片</button>
+            </div>
             <div class="cards-grid" id="cardsGrid">${cards.map(c => renderCardHTML(accountId, c)).join('')}</div>
         </div>
         <div id="tab-deposit" class="tab-content"><div class="loading"><div class="spinner"></div>加载中...</div></div>
@@ -597,6 +602,7 @@ function renderCardHTML(accountId, card) {
                     ${frozen?'🔥 解冻':'❄️ 冻结'}
                 </button>
                 <button class="btn btn-sm" onclick="showCardTransactions('${accountId}','${card.id}')">📜 消费记录</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteCardConfirm('${accountId}','${card.id}','${card.last4}')" title="删除卡片">🗑</button>
             </div>
         </div>`;
 }
@@ -625,7 +631,66 @@ async function reloadCards(accountId) {
         const subEl = document.getElementById('cardStatsSub');
         if (countEl) countEl.textContent = cards.length;
         if (subEl) subEl.textContent = `${cards.filter(c=>c.status==='ACTIVE').length} 活跃 · ${cards.filter(c=>c.status==='FROZEN').length} 冻结`;
+        // Refresh slot info
+        loadCardSlots(accountId);
     } catch (e) { console.error('reloadCards failed:', e); }
+}
+
+async function loadCardSlots(accountId) {
+    try {
+        const slots = await api('GET', `/api/accounts/${accountId}/card-slots`);
+        const info = document.getElementById('cardSlotsInfo');
+        const btn = document.getElementById('createCardBtn');
+        if (!info) return;
+
+        const active = slots.activeCards;
+        const max = slots.maxVirtual;
+        const left = slots.virtualLeft;
+        const coolDown = slots.virtualCoolDown;
+        const nextDate = slots.nextCreateDate;
+
+        let text = `卡槽 ${active}/${max}`;
+        if (coolDown > 0 && nextDate) {
+            const d = new Date(nextDate);
+            text += ` · ⏳ ${coolDown} 张冷却中 (${d.getMonth()+1}/${d.getDate()} 可创建)`;
+        }
+        if (left > 0) {
+            text += ` · ✅ 可创建 ${left} 张`;
+        }
+        info.textContent = text;
+
+        if (btn) {
+            btn.style.display = left > 0 ? '' : 'none';
+        }
+    } catch (e) {
+        console.error('loadCardSlots failed:', e);
+    }
+}
+
+async function createCard(accountId) {
+    if (!confirm('确定要创建一张新的虚拟卡片吗？')) return;
+    const btn = document.getElementById('createCardBtn');
+    if (btn) { btn.textContent = '创建中...'; btn.disabled = true; }
+    try {
+        await api('POST', `/api/accounts/${accountId}/cards/create`);
+        toast('卡片创建成功', 'success');
+        await reloadCards(accountId);
+    } catch (e) {
+        toast(e.message, 'error');
+    } finally {
+        if (btn) { btn.textContent = '+ 创建卡片'; btn.disabled = false; }
+    }
+}
+
+async function deleteCardConfirm(accountId, cardId, last4) {
+    if (!confirm(`确定删除卡片 **** ${last4} 吗？\n\n⚠️ 删除后需等待 30 天才能创建新卡片！`)) return;
+    try {
+        await api('DELETE', `/api/accounts/${accountId}/cards/${cardId}`);
+        toast('卡片已删除', 'success');
+        await reloadCards(accountId);
+    } catch (e) {
+        toast(e.message, 'error');
+    }
 }
 
 // ─── Deposit & Transactions ─────────────────────────────────────────

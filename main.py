@@ -498,6 +498,43 @@ async def unfreeze_card(account_id: str, card_id: str, auth: dict = Depends(requ
         raise HTTPException(500, str(e))
 
 
+@app.post("/api/accounts/{account_id}/cards/create")
+async def create_card(account_id: str, auth: dict = Depends(require_auth)):
+    """Create a new virtual card."""
+    client = get_client(account_id, auth["sub"], auth.get("role", "user"))
+    try:
+        result = client.create_card("Virtual")
+        return {"ok": True, "result": result}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.delete("/api/accounts/{account_id}/cards/{card_id}")
+async def delete_card_endpoint(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
+    """Delete a card. Triggers 30-day cooldown."""
+    client = get_client(account_id, auth["sub"], auth.get("role", "user"))
+    try:
+        result = client.delete_card(card_id)
+        # Clear card cache for this card
+        cache = _card_cache.get(account_id, {})
+        if card_id in cache:
+            del cache[card_id]
+            _save_cards_cache(_card_cache)
+        return {"ok": True, "result": result}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/accounts/{account_id}/card-slots")
+async def card_slots(account_id: str, auth: dict = Depends(require_auth)):
+    """Get card slot status (available slots, cooldown info)."""
+    client = get_client(account_id, auth["sub"], auth.get("role", "user"))
+    try:
+        return client.get_card_slots()
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/accounts/{account_id}/cards/{card_id}/reveal")
 async def reveal_card(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
