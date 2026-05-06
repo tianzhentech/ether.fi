@@ -1015,6 +1015,8 @@ function showCardTransactions(accountId, cardId) {
 function renderTxRow(tx) {
     const et = tx.eventType || '';
     const clickAttr = `onclick="showTxDetail('${tx.id}')"`;
+    const txTime = new Date(tx.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const timeHtml = `<div class="tx-time">${txTime}</div>`;
 
     if (et === 'rain_transaction') {
         const merchant = (tx.merchantData?.merchant_name || 'Unknown').trim();
@@ -1032,7 +1034,7 @@ function renderTxRow(tx) {
 
         return `
         <div class="tx-row" ${clickAttr}>
-            <div class="tx-icon">💳</div>
+            <div class="tx-side"><div class="tx-icon">💳</div>${timeHtml}</div>
             <div class="tx-info">
                 <div class="tx-merchant">${merchant}</div>
                 ${hasCashback ? '<div class="tx-cashback-label">返现</div>' : ''}
@@ -1055,7 +1057,7 @@ function renderTxRow(tx) {
 
         return `
         <div class="tx-row" ${clickAttr}>
-            <div class="tx-icon">↗</div>
+            <div class="tx-side"><div class="tx-icon">↗</div>${timeHtml}</div>
             <div class="tx-info">
                 <div class="tx-merchant">${symbol}</div>
                 <div class="tx-sub">${fmt(amountUSD)}</div>
@@ -1074,7 +1076,7 @@ function renderTxRow(tx) {
 
         return `
         <div class="tx-row" ${clickAttr}>
-            <div class="tx-icon" style="transform:rotate(180deg)">↗</div>
+            <div class="tx-side"><div class="tx-icon" style="transform:rotate(180deg)">↗</div>${timeHtml}</div>
             <div class="tx-info">
                 <div class="tx-merchant">${symbol}</div>
                 <div class="tx-sub">${fmt(amountUSD)}</div>
@@ -1088,7 +1090,7 @@ function renderTxRow(tx) {
 
     return `
     <div class="tx-row">
-        <div class="tx-icon">•</div>
+        <div class="tx-side"><div class="tx-icon">•</div>${timeHtml}</div>
         <div class="tx-info"><div class="tx-merchant">${et}</div></div>
         <div class="tx-amounts"><div class="tx-original">—</div></div>
     </div>`;
