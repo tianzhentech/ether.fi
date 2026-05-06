@@ -33,11 +33,14 @@ echo "  ether.fi Dashboard 更新"
 echo "═══════════════════════════════════════"
 echo ""
 
-# ─── 1. 拉取最新代码 ──────────────────────────────────
+# ─── 1. 清理 & 拉取最新代码 ────────────────────────────
+info "清理缓存文件..."
+sudo -u "$RUN_USER" bash -c "cd '$PROJECT_DIR' && find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; git checkout -- . 2>/dev/null"
+
 info "拉取最新代码..."
 sudo -u "$RUN_USER" bash -c "cd '$PROJECT_DIR' && git pull --ff-only" || {
-    warn "git pull 失败，尝试 git pull --rebase..."
-    sudo -u "$RUN_USER" bash -c "cd '$PROJECT_DIR' && git pull --rebase"
+    warn "git pull --ff-only 失败，尝试 git reset + pull..."
+    sudo -u "$RUN_USER" bash -c "cd '$PROJECT_DIR' && git fetch origin && git reset --hard origin/main"
 }
 
 # ─── 2. 同步依赖 ──────────────────────────────────────
