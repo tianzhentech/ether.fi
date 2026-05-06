@@ -602,7 +602,7 @@ function renderCardHTML(accountId, card) {
                     ${frozen?'🔥 解冻':'❄️ 冻结'}
                 </button>
                 <button class="btn btn-sm" onclick="showCardTransactions('${accountId}','${card.id}')">📜 消费记录</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCardConfirm('${accountId}','${card.id}','${card.last4}')" title="删除卡片">🗑</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteCardConfirm('${accountId}','${card.id}','${card.last4}')" title="删除卡片">🗑 删除</button>
             </div>
         </div>`;
 }
