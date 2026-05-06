@@ -65,6 +65,14 @@ function showApp() {
     updateSidebarUserInfo();
 }
 
+function renderAccountLoading(message = '账户加载中...') {
+    document.getElementById('mainContent').innerHTML = `
+        <div class="account-loading">
+            <div class="spinner"></div>
+            <span>${message}</span>
+        </div>`;
+}
+
 function updateSidebarUserInfo() {
     const info = document.getElementById('sidebarUserInfo');
     const roleBadge = currentUser.role === 'admin'
@@ -109,6 +117,7 @@ async function doLogin() {
         currentUser = { username: data.username, role: data.role };
         localStorage.setItem('dashboard_token', authToken);
         showApp();
+        renderAccountLoading();
         loadAccounts();
         toast(`欢迎, ${data.username}`, 'success');
     } catch (e) {
@@ -131,10 +140,12 @@ function logout() {
 
 async function checkAuth() {
     if (!authToken) { showLoginScreen(); return; }
+    showApp();
+    renderAccountLoading();
     try {
         const data = await api('GET', '/api/auth/check');
         currentUser = { username: data.username, role: data.role };
-        showApp();
+        updateSidebarUserInfo();
         loadAccounts();
     } catch {
         showLoginScreen();
@@ -236,11 +247,13 @@ async function addAccount() {
 async function loadAccounts() {
     try {
         accounts = await api('GET', '/api/accounts');
-        renderAccountList();
         if (accounts.length > 0 && !activeAccountId) {
-            selectAccount(accounts[0].id);
+            activeAccountId = accounts[0].id;
+            renderAccountList();
+            selectAccount(accounts[0].id, { renderList: false });
         } else if (accounts.length === 0) {
             activeAccountId = null;
+            renderAccountList();
             document.getElementById('mainContent').innerHTML = `
                 <div class="empty-state">
                     <div class="icon">💳</div>
@@ -248,6 +261,8 @@ async function loadAccounts() {
                     <p>添加 ether.fi Cash 账户以管理您的虚拟信用卡。</p>
                     <button class="btn btn-primary" onclick="showAddAccountModal()">添加账户</button>
                 </div>`;
+        } else {
+            renderAccountList();
         }
     } catch (e) { /* auth errors handled in api() */ }
 }
@@ -375,14 +390,14 @@ function updateSessionDisplay(accountId, data) {
     _sessionTimers[accountId] = setInterval(renderCountdown, 60000);
 }
 
-async function selectAccount(accountId) {
+async function selectAccount(accountId, options = {}) {
     activeAccountId = accountId;
     depositLoaded = {};
     withdrawLoaded = {};
     txLoaded = {};
-    renderAccountList();
+    if (options.renderList !== false) renderAccountList();
+    renderAccountLoading();
     const main = document.getElementById('mainContent');
-    main.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
 
     try {
         const [summary, cards] = await Promise.all([

@@ -8,8 +8,8 @@
 </head>
 <body>
 
-<!-- Loading Screen (shown first while checking auth) -->
-<div class="login-screen" id="loadingScreen">
+<!-- Loading Screen -->
+<div class="login-screen" id="loadingScreen" style="display:none">
     <div class="loading"><div class="spinner"></div></div>
 </div>
 
@@ -53,11 +53,9 @@
     </aside>
 
     <main class="main-content" id="mainContent">
-        <div class="empty-state">
-            <div class="icon">💳</div>
-            <h3>开始使用</h3>
-            <p>添加 ether.fi Cash 账户以管理您的虚拟信用卡。</p>
-            <button class="btn btn-primary" onclick="showAddAccountModal()">添加账户</button>
+        <div class="account-loading">
+            <div class="spinner"></div>
+            <span>账户加载中...</span>
         </div>
     </main>
 </div>

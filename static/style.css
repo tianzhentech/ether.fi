@@ -1214,6 +1214,15 @@ body {
     gap: 8px;
 }
 
+.account-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
 .spinner {
     width: 16px;
     height: 16px;
