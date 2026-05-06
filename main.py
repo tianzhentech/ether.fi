@@ -249,7 +249,7 @@ async def reset_password(username: str, request: Request):
 # ─── Protected API Routes ───────────────────────────────────────────
 
 @app.get("/api/accounts")
-async def list_accounts(auth: dict = Depends(require_auth)):
+def list_accounts(auth: dict = Depends(require_auth)):
     accounts = get_visible_accounts(auth["sub"], auth.get("role", "user"))
     return [{
         "id": a["id"], "label": a.get("label", ""), "email": a.get("email", ""),
@@ -261,8 +261,7 @@ async def list_accounts(auth: dict = Depends(require_auth)):
 
 
 @app.post("/api/accounts")
-async def add_account(request: Request, auth: dict = Depends(require_auth)):
-    body = await request.json()
+def add_account(body: dict, auth: dict = Depends(require_auth)):
     cookie_input = body.get("session_cookie", "").strip()
     label = body.get("label", "")
     proxy = body.get("proxy", "").strip()
@@ -321,7 +320,7 @@ async def add_account(request: Request, auth: dict = Depends(require_auth)):
 
 
 @app.delete("/api/accounts/{account_id}")
-async def delete_account(account_id: str, auth: dict = Depends(require_auth)):
+def delete_account(account_id: str, auth: dict = Depends(require_auth)):
     accounts = load_accounts()
     username, role = auth["sub"], auth.get("role", "user")
     acct = next((a for a in accounts if a["id"] == account_id), None)
@@ -337,7 +336,7 @@ async def delete_account(account_id: str, auth: dict = Depends(require_auth)):
 
 
 @app.patch("/api/accounts/{account_id}")
-async def update_account(account_id: str, body: dict, auth: dict = Depends(require_auth)):
+def update_account(account_id: str, body: dict, auth: dict = Depends(require_auth)):
     """Update account metadata (label, cookie, proxy)."""
     username = auth["sub"]
     role = auth.get("role", "user")
@@ -369,7 +368,7 @@ async def update_account(account_id: str, body: dict, auth: dict = Depends(requi
 
 
 @app.get("/api/accounts/{account_id}/session-status")
-async def session_status(account_id: str, auth: dict = Depends(require_auth)):
+def session_status(account_id: str, auth: dict = Depends(require_auth)):
     """Check session cookie validity and return expiry info."""
     accounts = load_accounts()
     acct = next((a for a in accounts if a["id"] == account_id), None)
@@ -410,7 +409,7 @@ async def session_status(account_id: str, auth: dict = Depends(require_auth)):
 
 
 @app.get("/api/accounts/{account_id}/summary")
-async def account_summary(account_id: str, auth: dict = Depends(require_auth)):
+def account_summary(account_id: str, auth: dict = Depends(require_auth)):
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
     try:
         return {**client.get_account_summary(), **client.get_balances()}
@@ -437,7 +436,7 @@ _card_cache: dict = _load_cards_cache()
 
 
 @app.get("/api/accounts/{account_id}/cards")
-async def account_cards(account_id: str, auth: dict = Depends(require_auth)):
+def account_cards(account_id: str, auth: dict = Depends(require_auth)):
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
     try:
         cards = client.get_cards()
@@ -483,7 +482,7 @@ async def account_cards(account_id: str, auth: dict = Depends(require_auth)):
 
 
 @app.post("/api/accounts/{account_id}/cards/{card_id}/freeze")
-async def freeze_card(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
+def freeze_card(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
     try:
         return {"ok": True, "result": get_client(account_id, auth["sub"], auth.get("role", "user")).freeze_card(card_id, freeze=True)}
     except Exception as e:
@@ -491,7 +490,7 @@ async def freeze_card(account_id: str, card_id: str, auth: dict = Depends(requir
 
 
 @app.post("/api/accounts/{account_id}/cards/{card_id}/unfreeze")
-async def unfreeze_card(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
+def unfreeze_card(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
     try:
         return {"ok": True, "result": get_client(account_id, auth["sub"], auth.get("role", "user")).freeze_card(card_id, freeze=False)}
     except Exception as e:
@@ -499,7 +498,7 @@ async def unfreeze_card(account_id: str, card_id: str, auth: dict = Depends(requ
 
 
 @app.post("/api/accounts/{account_id}/cards/create")
-async def create_card(account_id: str, auth: dict = Depends(require_auth)):
+def create_card(account_id: str, auth: dict = Depends(require_auth)):
     """Create a new virtual card."""
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
     try:
@@ -510,7 +509,7 @@ async def create_card(account_id: str, auth: dict = Depends(require_auth)):
 
 
 @app.delete("/api/accounts/{account_id}/cards/{card_id}")
-async def delete_card_endpoint(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
+def delete_card_endpoint(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
     """Delete a card. Triggers 30-day cooldown."""
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
     try:
@@ -526,7 +525,7 @@ async def delete_card_endpoint(account_id: str, card_id: str, auth: dict = Depen
 
 
 @app.get("/api/accounts/{account_id}/card-slots")
-async def card_slots(account_id: str, auth: dict = Depends(require_auth)):
+def card_slots(account_id: str, auth: dict = Depends(require_auth)):
     """Get card slot status (available slots, cooldown info)."""
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
     try:
@@ -536,7 +535,7 @@ async def card_slots(account_id: str, auth: dict = Depends(require_auth)):
 
 
 @app.post("/api/accounts/{account_id}/cards/{card_id}/reveal")
-async def reveal_card(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
+def reveal_card(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
     try:
         cards = client.get_cards()
@@ -559,7 +558,7 @@ async def reveal_card(account_id: str, card_id: str, auth: dict = Depends(requir
 
 
 @app.get("/api/accounts/{account_id}/deposit")
-async def deposit_info(account_id: str, auth: dict = Depends(require_auth)):
+def deposit_info(account_id: str, auth: dict = Depends(require_auth)):
     try:
         return get_client(account_id, auth["sub"], auth.get("role", "user")).get_deposit_info()
     except Exception as e:
@@ -567,7 +566,7 @@ async def deposit_info(account_id: str, auth: dict = Depends(require_auth)):
 
 
 @app.get("/api/accounts/{account_id}/transactions")
-async def transactions(account_id: str, page: int = 1, limit: int = 30, auth: dict = Depends(require_auth)):
+def transactions(account_id: str, page: int = 1, limit: int = 30, auth: dict = Depends(require_auth)):
     try:
         return get_client(account_id, auth["sub"], auth.get("role", "user")).get_transactions(page=page, limit=limit)
     except Exception as e:
@@ -575,9 +574,8 @@ async def transactions(account_id: str, page: int = 1, limit: int = 30, auth: di
 
 
 @app.put("/api/accounts/{account_id}/cards/{card_id}/spending-limit")
-async def update_spending_limit(account_id: str, card_id: str, request: Request, auth: dict = Depends(require_auth)):
+def update_spending_limit(account_id: str, card_id: str, body: dict, auth: dict = Depends(require_auth)):
     """Update the daily spending limit for a specific card."""
-    body = await request.json()
     daily_limit = body.get("dailyLimit")
     if daily_limit is None:
         raise HTTPException(400, "dailyLimit is required and must be greater than 0")
@@ -600,9 +598,8 @@ async def update_spending_limit(account_id: str, card_id: str, request: Request,
 _vault_pending: dict[str, dict] = {}
 
 @app.post("/api/accounts/{account_id}/vault/spending-limit-challenge")
-async def vault_spending_limit_challenge(account_id: str, request: Request, auth: dict = Depends(require_auth)):
+def vault_spending_limit_challenge(account_id: str, body: dict, auth: dict = Depends(require_auth)):
     """Step 1: Get the Turnkey challenge AND send email OTP in one call."""
-    body = await request.json()
     daily = body.get("dailyLimit")
     monthly = body.get("monthlyLimit")
     if daily is None or monthly is None:
@@ -639,9 +636,8 @@ async def vault_spending_limit_challenge(account_id: str, request: Request, auth
 
 
 @app.post("/api/accounts/{account_id}/vault/verify-otp-and-execute")
-async def vault_verify_otp_and_execute(account_id: str, request: Request, auth: dict = Depends(require_auth)):
+def vault_verify_otp_and_execute(account_id: str, body: dict, auth: dict = Depends(require_auth)):
     """Step 2: Verify OTP code, sign with Turnkey, and execute the limit update — all in one call."""
-    body = await request.json()
     otp_code = body.get("otpCode", "").strip()
     if not otp_code or len(otp_code) != 6:
         raise HTTPException(400, "请输入6位OTP验证码")
@@ -708,11 +704,9 @@ async def vault_verify_otp_and_execute(account_id: str, request: Request, auth: 
 _withdrawal_pending: dict = {}  # account_id -> {token, amount, recipient, challenge, otp_id}
 
 @app.get("/api/accounts/{account_id}/withdrawal-fee")
-async def withdrawal_fee(account_id: str, request: Request, auth: dict = Depends(require_auth)):
+def withdrawal_fee(account_id: str, token: str = "", amount: str = "", auth: dict = Depends(require_auth)):
     """Get withdrawal fee for a token/amount."""
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
-    token = request.query_params.get("token", "")
-    amount = request.query_params.get("amount", "")
     if not token or not amount:
         raise HTTPException(400, "缺少 token 或 amount 参数")
     try:
@@ -722,9 +716,8 @@ async def withdrawal_fee(account_id: str, request: Request, auth: dict = Depends
 
 
 @app.post("/api/accounts/{account_id}/withdrawal/challenge")
-async def withdrawal_challenge(account_id: str, request: Request, auth: dict = Depends(require_auth)):
+def withdrawal_challenge(account_id: str, body: dict, auth: dict = Depends(require_auth)):
     """Step 1: Get withdrawal challenge and send OTP."""
-    body = await request.json()
     token = body.get("token", "")
     amount = body.get("amount", "")
     recipient = body.get("recipient", "")
@@ -766,9 +759,8 @@ async def withdrawal_challenge(account_id: str, request: Request, auth: dict = D
 
 
 @app.post("/api/accounts/{account_id}/withdrawal/verify-and-execute")
-async def withdrawal_verify_and_execute(account_id: str, request: Request, auth: dict = Depends(require_auth)):
+def withdrawal_verify_and_execute(account_id: str, body: dict, auth: dict = Depends(require_auth)):
     """Step 2: Verify OTP, sign with Turnkey, execute withdrawal request, then process it."""
-    body = await request.json()
     otp_code = body.get("otpCode", "").strip()
     if not otp_code or len(otp_code) != 6:
         raise HTTPException(400, "请输入6位OTP验证码")
