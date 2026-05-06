@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Sensitive data - session cookies & credentials
+cookie/
+accounts.json
+users.json
+config.json
+
+# Cached/generated files
+icon_cache/
+har/
+js_chunks/
+
+# OS
+.DS_Store
+Thumbs.db
