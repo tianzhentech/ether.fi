@@ -461,8 +461,8 @@ function renderDashboard(accountId, summary, cards) {
         </div>
         <div class="tabs">
             <button class="tab active" onclick="switchTab('cards',this)">💳 卡片管理</button>
-            <button class="tab" onclick="switchTab('deposit',this)">💰 充值入金</button>
-            <button class="tab" onclick="switchTab('withdraw',this)">🏧 提现</button>
+            <button class="tab" onclick="switchTab('deposit',this)"><span class="tab-icon tab-icon-deposit">↗</span>充值入金</button>
+            <button class="tab" onclick="switchTab('withdraw',this)"><span class="tab-icon">↗</span>提现</button>
             <button class="tab" onclick="switchTab('transactions',this)">📜 消费记录</button>
         </div>
         <div id="tab-cards" class="tab-content active">

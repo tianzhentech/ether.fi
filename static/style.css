@@ -1270,6 +1270,9 @@ body {
 }
 
 .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 16px;
     border-radius: 8px;
     font-size: 13px;
@@ -1280,6 +1283,15 @@ body {
     border: none;
     background: none;
     font-family: inherit;
+}
+
+.tab-icon {
+    display: inline-flex;
+    line-height: 1;
+    color: currentColor;
+}
+.tab-icon-deposit {
+    transform: rotate(180deg);
 }
 
 .tab:hover { color: var(--text-primary); }
