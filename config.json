@@ -1,4 +1,0 @@
-{
-  "jwt_secret": "etherfi-dashboard-secret-key-change-me",
-  "token_expire_hours": 24
-}
