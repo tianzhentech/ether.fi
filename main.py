@@ -265,6 +265,7 @@ async def add_account(request: Request, auth: dict = Depends(require_auth)):
     body = await request.json()
     cookie_input = body.get("session_cookie", "").strip()
     label = body.get("label", "")
+    proxy = body.get("proxy", "").strip()
     if not cookie_input:
         raise HTTPException(400, "session_cookie is required")
 
@@ -278,7 +279,7 @@ async def add_account(request: Request, auth: dict = Depends(require_auth)):
         cookie_value = cookie_input
 
     try:
-        client = EtherFiClient(cookie_name, cookie_value)
+        client = EtherFiClient(cookie_name, cookie_value, proxy=proxy)
         if not client.is_valid():
             raise HTTPException(400, "Session cookie is invalid or expired")
         summary = client.get_account_summary()
@@ -307,6 +308,7 @@ async def add_account(request: Request, auth: dict = Depends(require_auth)):
         "name": summary.get("name", ""), "user_id": summary.get("user_id", ""),
         "added_at": datetime.datetime.now().isoformat(), "owner": owner,
         "cookie_expires": cookie_expires,
+        "proxy": proxy,
     }
     # Check if same account already exists for this owner
     idx = next((i for i, a in enumerate(accounts) if a["id"] == summary["user_id"] and a.get("owner") == owner), None)

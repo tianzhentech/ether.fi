@@ -240,18 +240,24 @@ async function promptResetPassword(username) {
 async function addAccount() {
     const cookieInput = document.getElementById('sessionCookieInput').value.trim();
     const label = document.getElementById('accountLabel').value.trim();
+    const proxy = document.getElementById('accountProxy').value.trim();
     if (!cookieInput) return toast('请输入 session cookie', 'error');
+
+    if (proxy && !/^(socks5h?|https?):\/\/.+/.test(proxy)) {
+        return toast('代理格式不正确', 'error');
+    }
 
     const btn = document.getElementById('addAccountBtn');
     btn.textContent = '验证中...';
     btn.disabled = true;
 
     try {
-        await api('POST', '/api/accounts', { session_cookie: cookieInput, label });
+        await api('POST', '/api/accounts', { session_cookie: cookieInput, label, proxy });
         toast('账户添加成功', 'success');
         hideModal('addAccountModal');
         document.getElementById('sessionCookieInput').value = '';
         document.getElementById('accountLabel').value = '';
+        document.getElementById('accountProxy').value = '';
         await loadAccounts();
     } catch (e) {
         toast(e.message, 'error');

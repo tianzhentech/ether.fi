@@ -77,6 +77,11 @@
             <label>备注 (可选)</label>
             <input type="text" id="accountLabel" placeholder="e.g. 主账户">
         </div>
+        <div class="form-group">
+            <label>代理 <span style="color:var(--text-muted);font-weight:400">(可选)</span></label>
+            <input type="text" id="accountProxy" placeholder="e.g. socks5://127.0.0.1:1080">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">支持 socks5 / socks5h / http</div>
+        </div>
         <div class="form-actions">
             <button class="btn" onclick="hideModal('addAccountModal')">取消</button>
             <button class="btn btn-primary" onclick="addAccount()" id="addAccountBtn">添加</button>
