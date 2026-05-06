@@ -444,8 +444,8 @@ function renderDashboard(accountId, summary, cards) {
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">💳 卡片</div>
-                    <div class="stat-value">${cards.length}</div>
-                    <div class="stat-sub">${cards.filter(c=>c.status==='ACTIVE').length} 活跃 · ${cards.filter(c=>c.status==='FROZEN').length} 冻结</div>
+                    <div class="stat-value" id="cardCount">${cards.length}</div>
+                    <div class="stat-sub" id="cardStatsSub">${cards.filter(c=>c.status==='ACTIVE').length} 活跃 · ${cards.filter(c=>c.status==='FROZEN').length} 冻结</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">📬 账单地址</div>
@@ -545,6 +545,11 @@ async function reloadCards(accountId) {
         const cards = await api('GET', `/api/accounts/${accountId}/cards`);
         const grid = document.getElementById('cardsGrid');
         if (grid) grid.innerHTML = cards.map(c => renderCardHTML(accountId, c)).join('');
+        // Update card stats
+        const countEl = document.getElementById('cardCount');
+        const subEl = document.getElementById('cardStatsSub');
+        if (countEl) countEl.textContent = cards.length;
+        if (subEl) subEl.textContent = `${cards.filter(c=>c.status==='ACTIVE').length} 活跃 · ${cards.filter(c=>c.status==='FROZEN').length} 冻结`;
     } catch (e) { console.error('reloadCards failed:', e); }
 }
 
