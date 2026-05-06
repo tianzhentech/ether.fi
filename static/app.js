@@ -58,11 +58,15 @@ function showLoginScreen() {
     setTimeout(() => document.getElementById('loginUsername')?.focus(), 100);
 }
 
-function showApp() {
+function showApp(options = {}) {
     document.getElementById('loadingScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appContainer').style.display = 'flex';
-    updateSidebarUserInfo();
+    if (options.updateUserInfo === false) {
+        renderSidebarUserLoading();
+    } else {
+        updateSidebarUserInfo();
+    }
 }
 
 function renderAccountLoading(message = '账户加载中...') {
@@ -73,8 +77,21 @@ function renderAccountLoading(message = '账户加载中...') {
         </div>`;
 }
 
+function renderSidebarUserLoading() {
+    document.getElementById('sidebarUserInfo').innerHTML = `
+        <div class="sidebar-user-loading">
+            <div class="spinner"></div>
+            <span>验证中...</span>
+        </div>`;
+    document.getElementById('userMgmtBtn').style.display = 'none';
+}
+
 function updateSidebarUserInfo() {
     const info = document.getElementById('sidebarUserInfo');
+    if (!currentUser.username) {
+        renderSidebarUserLoading();
+        return;
+    }
     const roleBadge = currentUser.role === 'admin'
         ? '<span style="font-size:10px;background:var(--accent);color:white;padding:2px 6px;border-radius:4px;margin-left:4px">ADMIN</span>'
         : '<span style="font-size:10px;background:var(--bg-card);color:var(--text-secondary);padding:2px 6px;border-radius:4px;margin-left:4px">USER</span>';
@@ -140,7 +157,7 @@ function logout() {
 
 async function checkAuth() {
     if (!authToken) { showLoginScreen(); return; }
-    showApp();
+    showApp({ updateUserInfo: false });
     renderAccountLoading();
     try {
         const data = await api('GET', '/api/auth/check');

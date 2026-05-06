@@ -1215,12 +1215,30 @@ body {
 }
 
 .account-loading {
-    display: inline-flex;
+    min-height: calc(100vh - 64px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0;
+    color: var(--text-secondary);
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.account-loading .spinner {
+    width: 28px;
+    height: 28px;
+    border-width: 3px;
+}
+
+.sidebar-user-loading {
+    display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 0;
+    padding: 8px 4px;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .spinner {
