@@ -833,8 +833,51 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # ─── Run ─────────────────────────────────────────────────────────────
 
+# Known token icon paths (from ether.fi CDN)
+KNOWN_TOKEN_ICONS = [
+    "svg/usdt.svg", "svg/usdc.svg", "svg/eth.svg", "svg/weth.svg", "svg/weeth.svg",
+    "svg/liquideth.svg", "svg/liquidusd.svg", "svg/liquidbtc.svg",
+    "svg/eurc.svg", "svg/eusd.svg", "svg/frxusd.svg",
+    "svg/ethfi.svg", "svg/scr.svg", "svg/hype.svg", "svg/whype.svg", "svg/behype.svg",
+    "svg/ebtc.svg",
+    "png/usdt.png", "png/weth.png",
+]
+
+
+def prefetch_icons():
+    """Pre-download all known icons to icon_cache/ so no external requests needed at runtime."""
+    count = 0
+    # Chain icons
+    for chain_id, url in CHAIN_ICON_URLS.items():
+        cache_path = ICON_CACHE_DIR / f"chain_{chain_id}.jpg"
+        if not cache_path.exists():
+            try:
+                r = req_lib.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                r.raise_for_status()
+                cache_path.write_bytes(r.content)
+                count += 1
+            except Exception as e:
+                print(f"  ⚠️ chain/{chain_id}: {e}")
+    # Token icons
+    for path in KNOWN_TOKEN_ICONS:
+        safe_name = path.replace("/", "_")
+        cache_path = ICON_CACHE_DIR / f"token_{safe_name}"
+        if not cache_path.exists():
+            url = f"https://www.ether.fi/app/cash/images/tokens/{path}"
+            try:
+                r = req_lib.get(url, timeout=10)
+                r.raise_for_status()
+                cache_path.write_bytes(r.content)
+                count += 1
+            except Exception as e:
+                print(f"  ⚠️ token/{path}: {e}")
+    if count > 0:
+        print(f"📦 已预缓存 {count} 个图标")
+
+
 if __name__ == "__main__":
     users = load_users()
     print(f"🚀 ether.fi Cash Dashboard → http://localhost:{PORT}")
     print(f"👤 已注册用户: {', '.join(u['username'] for u in users)}")
+    prefetch_icons()
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")
