@@ -8,6 +8,7 @@ let activeTabId = 'cards';
 let summaryRefreshTimer = null;
 let summaryRefreshMode = 'normal';
 let summaryRefreshInFlight = false;
+let resetPasswordTarget = '';
 
 const SUMMARY_REFRESH_NORMAL_MS = 60000;
 const SUMMARY_REFRESH_ACTIVE_MONEY_TAB_MS = 20000;
@@ -207,8 +208,8 @@ async function refreshUserList() {
                         <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
                         <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
                     </select>
-                    <button class="btn btn-sm" onclick="promptResetPassword('${u.username}')" title="重置密码">🔑</button>
-                    ${u.username !== 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')" title="删除">✕</button>` : ''}
+                    <button class="btn btn-sm" onclick='showResetPasswordModal(${JSON.stringify(u.username)})' title="重置密码">🔑</button>
+                    ${u.username !== 'admin' ? `<button class="btn btn-danger btn-sm" onclick='deleteUser(${JSON.stringify(u.username)})' title="删除">✕</button>` : ''}
                 </div>
             </div>
         `).join('');
@@ -258,14 +259,44 @@ async function deleteUser(username) {
     }
 }
 
-async function promptResetPassword(username) {
-    const newPwd = prompt(`重置 ${username} 的密码:`);
-    if (!newPwd) return;
+function showResetPasswordModal(username) {
+    resetPasswordTarget = username;
+    document.getElementById('resetPasswordUsername').value = username;
+    document.getElementById('resetPasswordInput').value = '';
+    document.getElementById('resetPasswordError').textContent = '';
+    showModal('resetPasswordModal');
+    setTimeout(() => document.getElementById('resetPasswordInput')?.focus(), 50);
+}
+
+async function submitResetPassword() {
+    const username = resetPasswordTarget;
+    const input = document.getElementById('resetPasswordInput');
+    const btn = document.getElementById('resetPasswordBtn');
+    const error = document.getElementById('resetPasswordError');
+    const newPwd = input.value;
+
+    error.textContent = '';
+    if (!username) {
+        error.textContent = '未选择用户';
+        return;
+    }
+    if (!newPwd) {
+        error.textContent = '请输入新密码';
+        input.focus();
+        return;
+    }
+
+    btn.textContent = '保存中...';
+    btn.disabled = true;
     try {
-        await api('PUT', `/api/users/${username}/password`, { password: newPwd });
+        await api('PUT', `/api/users/${encodeURIComponent(username)}/password`, { password: newPwd });
         toast(`${username} 密码已重置`, 'success');
+        hideModal('resetPasswordModal');
     } catch (e) {
-        toast(e.message, 'error');
+        error.textContent = e.message;
+    } finally {
+        btn.textContent = '保存';
+        btn.disabled = false;
     }
 }
 
@@ -1944,3 +1975,4 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 
 document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
+document.getElementById('resetPasswordInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitResetPassword(); });
