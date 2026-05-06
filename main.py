@@ -111,7 +111,7 @@ def get_client(account_id: str, username: str, role: str) -> EtherFiClient:
     # Access control: non-admin can only access their own
     if role != "admin" and acct.get("owner") != username:
         raise HTTPException(403, "无权访问此账户")
-    return EtherFiClient(acct["cookie_name"], acct["cookie_value"])
+    return EtherFiClient(acct["cookie_name"], acct["cookie_value"], proxy=acct.get("proxy", ""))
 
 
 # ─── Auth ─────────────────────────────────────────────────────────────
@@ -255,6 +255,8 @@ async def list_accounts(auth: dict = Depends(require_auth)):
         "id": a["id"], "label": a.get("label", ""), "email": a.get("email", ""),
         "name": a.get("name", ""), "user_id": a.get("user_id", ""),
         "added_at": a.get("added_at", ""), "owner": a.get("owner", ""),
+        "proxy": a.get("proxy", ""),
+        "cookie_name": a.get("cookie_name", ""), "cookie_value": a.get("cookie_value", ""),
     } for a in accounts]
 
 
@@ -334,17 +336,34 @@ async def delete_account(account_id: str, auth: dict = Depends(require_auth)):
 
 @app.patch("/api/accounts/{account_id}")
 async def update_account(account_id: str, body: dict, auth: dict = Depends(require_auth)):
-    """Update account metadata (label)."""
+    """Update account metadata (label, cookie, proxy)."""
     username = auth["sub"]
     role = auth.get("role", "user")
     accounts = load_accounts()
     acct = next((a for a in accounts if a["id"] == account_id and (role == "admin" or a.get("owner") == username)), None)
     if not acct:
         raise HTTPException(404, "Account not found")
-    if "label" in body:
-        acct["label"] = body["label"].strip()
+    editable = ["label", "proxy"]
+    for key in editable:
+        if key in body:
+            acct[key] = body[key].strip() if isinstance(body[key], str) else body[key]
+    # Cookie update requires re-parsing
+    if "cookie" in body and body["cookie"].strip():
+        raw = body["cookie"].strip()
+        if "=" in raw:
+            cname, _, cval = raw.partition("=")
+            acct["cookie_name"] = cname.strip()
+            acct["cookie_value"] = cval.strip()
+            # Update user_id from cookie name
+            if cname.strip().startswith("session_"):
+                acct["user_id"] = cname.strip()[len("session_"):]
+                acct["id"] = acct["user_id"]
+            # Clear card cache for this account since cookie changed
+            if account_id in _card_cache:
+                del _card_cache[account_id]
+                _save_cards_cache(_card_cache)
     save_accounts(accounts)
-    return {"ok": True, "label": acct.get("label", "")}
+    return {"ok": True}
 
 
 @app.get("/api/accounts/{account_id}/session-status")
@@ -376,7 +395,7 @@ async def session_status(account_id: str, auth: dict = Depends(require_auth)):
     # Quick validity check via API
     alive = False
     try:
-        client = EtherFiClient(acct["cookie_name"], acct["cookie_value"])
+        client = EtherFiClient(acct["cookie_name"], acct["cookie_value"], proxy=acct.get("proxy", ""))
         alive = client.is_valid()
     except Exception:
         pass

@@ -24,11 +24,12 @@ CHAIN_NAMES = {
 class EtherFiClient:
     """Authenticated client for a single ether.fi Cash account."""
 
-    def __init__(self, session_cookie_name: str, session_cookie_value: str):
+    def __init__(self, session_cookie_name: str, session_cookie_value: str, proxy: str = ""):
         """
         Initialize with the critical session cookie.
         session_cookie_name: e.g. "session_b075400a-..."
         session_cookie_value: e.g. "cc0bbadd-..."
+        proxy: e.g. "socks5://127.0.0.1:1080" or "http://user:pass@host:port"
         """
         self.session = requests.Session()
         self.session.headers.update({
@@ -40,6 +41,9 @@ class EtherFiClient:
             "Referer": "https://www.ether.fi/app/cash/card",
         })
         self.session.cookies.set(session_cookie_name, session_cookie_value, domain="www.ether.fi", path="/")
+
+        if proxy:
+            self.session.proxies = {"http": proxy, "https": proxy}
 
         # Extract active_user from cookie name
         if session_cookie_name.startswith("session_"):

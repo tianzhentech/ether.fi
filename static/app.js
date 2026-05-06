@@ -293,12 +293,13 @@ function renderAccountList() {
         // Preserve existing session status text if available
         const existingEl = document.getElementById(`session-${a.id}`);
         const sessionHtml = existingEl ? existingEl.innerHTML : '⏳ 检查中...';
+        const proxyIcon = a.proxy ? ' 🌐' : '';
         return `
         <div class="account-item ${a.id === activeAccountId ? 'active' : ''}"
              onclick="selectAccount('${a.id}')">
             <div class="account-name-row">
-                <span class="account-name" id="acctName-${a.id}">${displayName}</span>
-                <button class="btn-rename" onclick="event.stopPropagation(); startRenameAccount('${a.id}')" title="修改备注">✏️</button>
+                <span class="account-name" id="acctName-${a.id}">${displayName}${proxyIcon}</span>
+                <button class="btn-rename" onclick="event.stopPropagation(); showEditAccountModal('${a.id}')" title="编辑账户">✏️</button>
             </div>
             ${hasCustomLabel ? `<div class="account-email">${a.email}</div>` : ''}
             <div class="account-session" id="session-${a.id}">${sessionHtml}</div>
@@ -310,50 +311,77 @@ function checkAllSessions() {
     accounts.forEach(a => loadSessionStatus(a.id));
 }
 
-function startRenameAccount(accountId) {
-    const nameEl = document.getElementById(`acctName-${accountId}`);
-    if (!nameEl) return;
-    const row = nameEl.closest('.account-name-row');
-    const currentLabel = nameEl.textContent;
-    row.innerHTML = `
-        <input type="text" class="rename-input" id="renameInput-${accountId}"
-               value="${currentLabel}" 
-               onclick="event.stopPropagation()"
-               onkeydown="handleRenameKey(event, '${accountId}')"
-               onblur="saveRenameAccount('${accountId}')">
-    `;
-    const input = document.getElementById(`renameInput-${accountId}`);
-    input.focus();
-    input.select();
-}
+function showEditAccountModal(accountId) {
+    const acct = accounts.find(a => a.id === accountId);
+    if (!acct) return;
 
-function handleRenameKey(event, accountId) {
-    if (event.key === 'Enter') {
-        event.target.blur(); // triggers onblur → save
-    } else if (event.key === 'Escape') {
-        // Cancel: re-render
-        renderAccountList();
+    let modal = document.getElementById('editAccountModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'editAccountModal';
+        modal.className = 'modal-overlay';
+        modal.addEventListener('click', e => { if (e.target === modal) hideModal('editAccountModal'); });
+        document.body.appendChild(modal);
     }
+
+    const cookieStr = acct.cookie_name && acct.cookie_value
+        ? `${acct.cookie_name}=${acct.cookie_value}` : '';
+
+    modal.innerHTML = `
+        <div class="modal" style="max-width:480px">
+            <h2>✏️ 编辑账户</h2>
+            <div class="form-group">
+                <label>备注</label>
+                <input type="text" id="editLabel" value="${acct.label || ''}" placeholder="e.g. 主账户">
+            </div>
+            <div class="form-group">
+                <label>Session Cookie</label>
+                <textarea id="editCookie" placeholder="session_{userId}={sessionValue}" rows="2">${cookieStr}</textarea>
+            </div>
+            <div class="form-group">
+                <label>代理 <span style="color:var(--text-muted);font-weight:400">(可选，支持 socks5/socks5h/http)</span></label>
+                <input type="text" id="editProxy" value="${acct.proxy || ''}" placeholder="e.g. socks5://127.0.0.1:1080">
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                    格式: socks5://host:port · socks5h://user:pass@host:port · http://host:port
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+                <label style="color:var(--text-muted)">邮箱</label>
+                <div style="font-size:13px;padding:8px 0">${acct.email || '—'}</div>
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('editAccountModal')">取消</button>
+                <button class="btn btn-primary" id="saveEditBtn" onclick="saveEditAccount('${accountId}')">保存</button>
+            </div>
+        </div>`;
+    showModal('editAccountModal');
+    document.getElementById('editLabel').focus();
 }
 
-async function saveRenameAccount(accountId) {
-    const input = document.getElementById(`renameInput-${accountId}`);
-    if (!input) return;
-    const newLabel = input.value.trim();
-    if (!newLabel) {
-        renderAccountList();
+async function saveEditAccount(accountId) {
+    const btn = document.getElementById('saveEditBtn');
+    btn.textContent = '保存中...'; btn.disabled = true;
+
+    const label = document.getElementById('editLabel').value.trim();
+    const cookie = document.getElementById('editCookie').value.trim();
+    const proxy = document.getElementById('editProxy').value.trim();
+
+    // Validate proxy format if provided
+    if (proxy && !/^(socks5h?|https?):\/\/.+/.test(proxy)) {
+        toast('代理格式不正确，应为 socks5://host:port 等', 'error');
+        btn.textContent = '保存'; btn.disabled = false;
         return;
     }
+
     try {
-        await api('PATCH', `/api/accounts/${accountId}`, { label: newLabel });
-        // Update local accounts cache
-        const acct = accounts.find(a => a.id === accountId);
-        if (acct) acct.label = newLabel;
-        renderAccountList();
-        toast('备注已更新', 'success');
+        await api('PATCH', `/api/accounts/${accountId}`, { label, cookie, proxy });
+        toast('账户已更新', 'success');
+        hideModal('editAccountModal');
+        // Reload to pick up any changes (especially cookie/id changes)
+        await loadAccounts();
     } catch (e) {
-        toast('备注更新失败', 'error');
-        renderAccountList();
+        toast(e.message, 'error');
+        btn.textContent = '保存'; btn.disabled = false;
     }
 }
 
