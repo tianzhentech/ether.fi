@@ -20,6 +20,7 @@ Usage:
 import datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import jwt
@@ -30,24 +31,42 @@ from fastapi.staticfiles import StaticFiles
 
 from etherfi.client import EtherFiClient
 
-# ─── Config ────────────────────────────────────────────────────────────
+# ─── Config (.env) ─────────────────────────────────────────────────────
 
 APP_DIR = Path(__file__).parent
+
+# Simple .env loader (no extra dependency)
+def _load_dotenv():
+    env_file = APP_DIR / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            # Don't override existing env vars
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+_load_dotenv()
+
+def env(key: str, default: str = "") -> str:
+    return os.environ.get(key, default)
+
 DATA_FILE = APP_DIR / "accounts.json"
 USERS_FILE = APP_DIR / "users.json"
-CONFIG_FILE = APP_DIR / "config.json"
 STATIC_DIR = APP_DIR / "static"
 
-
-def load_config() -> dict:
-    if CONFIG_FILE.exists():
-        return json.loads(CONFIG_FILE.read_text())
-    return {"jwt_secret": "change-me", "token_expire_hours": 24}
-
-
-CONFIG = load_config()
-JWT_SECRET = CONFIG.get("jwt_secret", "etherfi-dashboard-secret")
-TOKEN_EXPIRE_HOURS = CONFIG.get("token_expire_hours", 24)
+HOST = env("HOST", "0.0.0.0")
+PORT = int(env("PORT", "8788"))
+JWT_SECRET = env("JWT_SECRET", "change-me")
+TOKEN_EXPIRE_HOURS = int(env("TOKEN_EXPIRE_HOURS", "24"))
+DEFAULT_ADMIN_USER = env("DEFAULT_ADMIN_USER", "admin")
+DEFAULT_ADMIN_PASS = env("DEFAULT_ADMIN_PASS", "admin123")
 
 
 def hash_password(password: str) -> str:
@@ -60,7 +79,7 @@ def load_users() -> list[dict]:
     if USERS_FILE.exists():
         return json.loads(USERS_FILE.read_text())
     # Bootstrap with default admin
-    default = [{"username": "admin", "password_hash": hash_password("admin123"), "role": "admin"}]
+    default = [{"username": DEFAULT_ADMIN_USER, "password_hash": hash_password(DEFAULT_ADMIN_PASS), "role": "admin"}]
     save_users(default)
     return default
 
@@ -826,6 +845,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     users = load_users()
-    print("🚀 ether.fi Cash Dashboard → http://localhost:8788")
+    print(f"🚀 ether.fi Cash Dashboard → http://localhost:{PORT}")
     print(f"👤 已注册用户: {', '.join(u['username'] for u in users)}")
-    uvicorn.run(app, host="0.0.0.0", port=8788, log_level="info")
+    uvicorn.run(app, host=HOST, port=PORT, log_level="info")

@@ -8,7 +8,7 @@ __pycache__/
 cookie/
 accounts.json
 users.json
-config.json
+.env
 
 # Cached/generated files
 icon_cache/
