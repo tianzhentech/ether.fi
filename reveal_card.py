@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.10"
-# dependencies = [
-#     "cryptography>=43.0",
-#     "requests>=2.31",
-# ]
-# ///
 """
 ether.fi Cash — 协议化卡号获取 (reveal-rain)
 

@@ -1,0 +1,15 @@
+[project]
+name = "ether-fi"
+version = "0.1.0"
+description = "ether.fi Cash 多账户管理后台"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "cryptography>=43.0",
+    "requests>=2.31",
+    "pyjwt>=2.8",
+]
+
+[project.scripts]
+dashboard = "main:app"

@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.10"
-# dependencies = [
-#     "fastapi>=0.115",
-#     "uvicorn>=0.30",
-#     "cryptography>=43.0",
-#     "requests>=2.31",
-#     "pyjwt>=2.8",
-# ]
-# ///
 """
 ether.fi Cash 管理后台 (多用户版)
 
