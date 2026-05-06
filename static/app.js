@@ -4,6 +4,13 @@ let activeAccountId = null;
 let authToken = localStorage.getItem('dashboard_token') || '';
 let currentUser = { username: '', role: '' };
 let accountSummaryCache = {};
+let activeTabId = 'cards';
+let summaryRefreshTimer = null;
+let summaryRefreshMode = 'normal';
+let summaryRefreshInFlight = false;
+
+const SUMMARY_REFRESH_NORMAL_MS = 60000;
+const SUMMARY_REFRESH_ACTIVE_MONEY_TAB_MS = 20000;
 
 // ─── API Helpers ────────────────────────────────────────────────────
 async function api(method, path, body = null) {
@@ -158,6 +165,7 @@ function logout() {
     localStorage.removeItem('dashboard_token');
     currentUser = { username: '', role: '' };
     activeAccountId = null;
+    stopSummaryRefresh();
     accountSummaryCache = {};
     depositLoaded = {};
     txLoaded = {};
@@ -285,6 +293,7 @@ async function loadAccounts() {
             checkAllSessions();
             selectAccount(accounts[0].id, { renderList: false });
         } else if (accounts.length === 0) {
+            stopSummaryRefresh();
             activeAccountId = null;
             renderAccountList();
             document.getElementById('mainContent').innerHTML = `
@@ -493,7 +502,9 @@ function updateSessionDisplay(accountId, data) {
 }
 
 async function selectAccount(accountId, options = {}) {
+    stopSummaryRefresh();
     activeAccountId = accountId;
+    activeTabId = 'cards';
     depositLoaded = {};
     withdrawLoaded = {};
     txLoaded = {};
@@ -511,6 +522,7 @@ async function selectAccount(accountId, options = {}) {
         // Cache cards for tx detail lookup
         cards.forEach(c => { _cardsCache[c.id] = c; });
         renderDashboard(accountId, summary, cards, slots);
+        startSummaryRefresh('normal');
         _updateSlotCountdowns();
     } catch (e) {
         main.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h3>加载失败</h3><p>${e.message}</p>
@@ -525,12 +537,24 @@ async function deleteAccount(accountId) {
         delete accountSummaryCache[accountId];
         delete depositData[accountId];
         toast('账户已删除', 'success');
-        if (activeAccountId === accountId) activeAccountId = null;
+        if (activeAccountId === accountId) {
+            stopSummaryRefresh();
+            activeAccountId = null;
+        }
         await loadAccounts();
     } catch (e) { toast(e.message, 'error'); }
 }
 
 // ─── Dashboard Render ───────────────────────────────────────────────
+function renderBalanceTokens(summary) {
+    const balances = summary.balances || [];
+    return balances.map(b => `<div class="balance-token"><img src="${b.icon}" width="14" height="14" style="vertical-align:-2px;border-radius:50%;margin-right:2px" onerror="this.style.display='none'">${b.symbol} ${b.amount} ($${fmt(b.usd_value)})</div>`).join('') || '无余额';
+}
+
+function limitPercent(used, limit) {
+    return Math.min(100, limit > 0 ? (used / limit * 100) : 0);
+}
+
 function renderDashboard(accountId, summary, cards, slots = null) {
     document.getElementById('mainContent').innerHTML = `
         <div class="section">
@@ -541,8 +565,8 @@ function renderDashboard(accountId, summary, cards, slots = null) {
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-label">💰 账户余额</div>
-                    <div class="stat-value">$${fmt(summary.total_balance || 0)}</div>
-                    <div class="stat-sub">${(summary.balances || []).map(b => `<div class="balance-token"><img src="${b.icon}" width="14" height="14" style="vertical-align:-2px;border-radius:50%;margin-right:2px" onerror="this.style.display='none'">${b.symbol} ${b.amount} ($${fmt(b.usd_value)})</div>`).join('') || '无余额'}</div>
+                    <div class="stat-value" id="summaryTotalBalance">$${fmt(summary.total_balance || 0)}</div>
+                    <div class="stat-sub" id="summaryBalanceTokens">${renderBalanceTokens(summary)}</div>
                 </div>
                 <div class="stat-card vault-limit-card">
                     <div class="stat-label-row">
@@ -553,16 +577,16 @@ function renderDashboard(accountId, summary, cards, slots = null) {
                         <div class="vault-limit-item">
                             <div class="vault-limit-head">
                                 <span class="vault-limit-type">日</span>
-                                <span class="vault-limit-nums">$${fmt(summary.daily_used)}/$${fmt(summary.daily_limit)}</span>
+                                <span class="vault-limit-nums" id="summaryDailyLimit">$${fmt(summary.daily_used)}/$${fmt(summary.daily_limit)}</span>
                             </div>
-                            <div class="vault-limit-bar"><div class="vault-limit-fill" style="width:${Math.min(100, summary.daily_limit > 0 ? (summary.daily_used / summary.daily_limit * 100) : 0)}%"></div></div>
+                            <div class="vault-limit-bar"><div class="vault-limit-fill" id="summaryDailyLimitFill" style="width:${limitPercent(summary.daily_used, summary.daily_limit)}%"></div></div>
                         </div>
                         <div class="vault-limit-item">
                             <div class="vault-limit-head">
                                 <span class="vault-limit-type">月</span>
-                                <span class="vault-limit-nums">$${fmt(summary.monthly_used)}/$${fmt(summary.monthly_limit)}</span>
+                                <span class="vault-limit-nums" id="summaryMonthlyLimit">$${fmt(summary.monthly_used)}/$${fmt(summary.monthly_limit)}</span>
                             </div>
-                            <div class="vault-limit-bar"><div class="vault-limit-fill vault-limit-fill-monthly" style="width:${Math.min(100, summary.monthly_limit > 0 ? (summary.monthly_used / summary.monthly_limit * 100) : 0)}%"></div></div>
+                            <div class="vault-limit-bar"><div class="vault-limit-fill vault-limit-fill-monthly" id="summaryMonthlyLimitFill" style="width:${limitPercent(summary.monthly_used, summary.monthly_limit)}%"></div></div>
                         </div>
                     </div>
                 </div>
@@ -600,13 +624,74 @@ function renderDashboard(accountId, summary, cards, slots = null) {
 }
 
 function switchTab(tabId, el) {
+    activeTabId = tabId;
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
     document.getElementById(`tab-${tabId}`).classList.add('active');
+    startSummaryRefresh(tabId === 'deposit' || tabId === 'withdraw' ? 'money-tab' : 'normal');
+    if (tabId === 'deposit' || tabId === 'withdraw') refreshAccountSummary(activeAccountId);
     if (tabId === 'deposit') loadDeposit(activeAccountId);
     if (tabId === 'withdraw') loadWithdraw(activeAccountId);
     if (tabId === 'transactions') loadTransactions(activeAccountId);
+}
+
+function startSummaryRefresh(mode = 'normal') {
+    summaryRefreshMode = mode;
+    if (summaryRefreshTimer) clearInterval(summaryRefreshTimer);
+    if (!activeAccountId) return;
+    const interval = mode === 'money-tab'
+        ? SUMMARY_REFRESH_ACTIVE_MONEY_TAB_MS
+        : SUMMARY_REFRESH_NORMAL_MS;
+    summaryRefreshTimer = setInterval(() => refreshAccountSummary(activeAccountId), interval);
+}
+
+function stopSummaryRefresh() {
+    if (summaryRefreshTimer) {
+        clearInterval(summaryRefreshTimer);
+        summaryRefreshTimer = null;
+    }
+    summaryRefreshInFlight = false;
+}
+
+async function refreshAccountSummary(accountId) {
+    if (!accountId || accountId !== activeAccountId || summaryRefreshInFlight) return;
+    summaryRefreshInFlight = true;
+    try {
+        const summary = await api('GET', `/api/accounts/${accountId}/summary`);
+        if (accountId !== activeAccountId) return;
+        accountSummaryCache[accountId] = summary;
+        applySummaryToDashboard(accountId, summary);
+    } catch (e) {
+        console.warn('summary refresh failed', e);
+    } finally {
+        summaryRefreshInFlight = false;
+    }
+}
+
+function applySummaryToDashboard(accountId, summary) {
+    const totalEl = document.getElementById('summaryTotalBalance');
+    if (totalEl) totalEl.textContent = `$${fmt(summary.total_balance || 0)}`;
+
+    const tokensEl = document.getElementById('summaryBalanceTokens');
+    if (tokensEl) tokensEl.innerHTML = renderBalanceTokens(summary);
+
+    const dailyEl = document.getElementById('summaryDailyLimit');
+    if (dailyEl) dailyEl.textContent = `$${fmt(summary.daily_used)}/$${fmt(summary.daily_limit)}`;
+
+    const monthlyEl = document.getElementById('summaryMonthlyLimit');
+    if (monthlyEl) monthlyEl.textContent = `$${fmt(summary.monthly_used)}/$${fmt(summary.monthly_limit)}`;
+
+    const dailyFill = document.getElementById('summaryDailyLimitFill');
+    if (dailyFill) dailyFill.style.width = `${limitPercent(summary.daily_used, summary.daily_limit)}%`;
+
+    const monthlyFill = document.getElementById('summaryMonthlyLimitFill');
+    if (monthlyFill) monthlyFill.style.width = `${limitPercent(summary.monthly_used, summary.monthly_limit)}%`;
+
+    const editBtn = document.querySelector('.btn-edit-limit');
+    if (editBtn) editBtn.setAttribute('onclick', `showVaultLimitModal('${accountId}', ${summary.daily_limit}, ${summary.monthly_limit})`);
+
+    updateWithdrawBalances(summary.balances || []);
 }
 
 function renderCardHTML(accountId, card) {
@@ -1617,12 +1702,7 @@ async function loadWithdraw(accountId) {
 
         window._wdBalances = balances;
 
-        const tokenItems = balances.map((b, i) =>
-            `<div class="dropdown-item" onclick="selectWithdrawToken(${i})">
-                <img class="dropdown-icon" src="${b.icon}" alt="${b.symbol}" onerror="this.style.display='none'">
-                <span>${b.symbol} — ${b.amount} ($${fmt(b.usd_value)})</span>
-            </div>`
-        ).join('');
+        const tokenItems = balances.map(renderWithdrawTokenOption).join('');
 
         c.innerHTML = `
             <div class="deposit-flow">
@@ -1631,8 +1711,7 @@ async function loadWithdraw(accountId) {
                     <div class="custom-dropdown" id="wdTokenDropdown">
                         <div class="dropdown-trigger" onclick="toggleDropdown('wdTokenDropdown')">
                             <div class="dropdown-selected" id="wdTokenSelected">
-                                <img class="dropdown-icon" src="${balances[0].icon}" alt="${balances[0].symbol}" onerror="this.style.display='none'">
-                                <span>${balances[0].symbol} — ${balances[0].amount} ($${fmt(balances[0].usd_value)})</span>
+                                ${renderWithdrawTokenSelected(balances[0])}
                             </div>
                             <span class="dropdown-arrow">▾</span>
                         </div>
@@ -1677,14 +1756,59 @@ async function loadWithdraw(accountId) {
     }
 }
 
+function renderWithdrawTokenOption(b, i) {
+    return `<div class="dropdown-item" onclick="selectWithdrawToken(${i})">
+        <img class="dropdown-icon" src="${b.icon}" alt="${b.symbol}" onerror="this.style.display='none'">
+        <span>${b.symbol} — ${b.amount} ($${fmt(b.usd_value)})</span>
+    </div>`;
+}
+
+function renderWithdrawTokenSelected(b) {
+    return `
+        <img class="dropdown-icon" src="${b.icon}" alt="${b.symbol}" onerror="this.style.display='none'">
+        <span>${b.symbol} — ${b.amount} ($${fmt(b.usd_value)})</span>`;
+}
+
+function updateWithdrawBalances(balances) {
+    if (activeTabId !== 'withdraw') return;
+    if (!withdrawLoaded[activeAccountId]) return;
+
+    window._wdBalances = balances;
+
+    const tab = document.getElementById('tab-withdraw');
+    const tokenSelect = document.getElementById('w-token');
+    const tokenMenu = document.getElementById('wdTokenMenu');
+    const tokenSelected = document.getElementById('wdTokenSelected');
+    if (!tab) return;
+
+    if (!tokenSelect || !tokenMenu || !tokenSelected) {
+        if (balances.length > 0) {
+            withdrawLoaded[activeAccountId] = false;
+            loadWithdraw(activeAccountId);
+        }
+        return;
+    }
+
+    if (balances.length === 0) {
+        tab.innerHTML = '<div class="empty-state">当前账户无可提现资产</div>';
+        return;
+    }
+
+    let idx = parseInt(tokenSelect.value);
+    if (!Number.isFinite(idx) || idx < 0 || idx >= balances.length) idx = 0;
+    tokenSelect.value = idx;
+
+    tokenMenu.innerHTML = balances.map(renderWithdrawTokenOption).join('');
+    tokenSelected.innerHTML = renderWithdrawTokenSelected(balances[idx]);
+    updateWithdrawHint(balances);
+}
+
 function selectWithdrawToken(idx) {
     const balances = window._wdBalances || [];
     const b = balances[idx];
     if (!b) return;
     document.getElementById('w-token').value = idx;
-    document.getElementById('wdTokenSelected').innerHTML = `
-        <img class="dropdown-icon" src="${b.icon}" alt="${b.symbol}" onerror="this.style.display='none'">
-        <span>${b.symbol} — ${b.amount} ($${fmt(b.usd_value)})</span>`;
+    document.getElementById('wdTokenSelected').innerHTML = renderWithdrawTokenSelected(b);
     document.getElementById('wdTokenDropdown').classList.remove('open');
     document.getElementById('w-balance-hint').textContent = `可用: ${b.amount} ${b.symbol}`;
 }
@@ -1785,8 +1909,7 @@ async function verifyWithdrawalOTP(accountId) {
         try {
             const summary = await api('GET', `/api/accounts/${accountId}/summary`);
             accountSummaryCache[accountId] = summary;
-            const balEl = document.querySelector('.stat-value');
-            if (balEl) balEl.textContent = `$${fmt(summary.total_balance || 0)}`;
+            applySummaryToDashboard(accountId, summary);
         } catch (_) {}
     } catch (e) {
         resultDiv.innerHTML = `<div style="color:var(--error)">❌ ${e.message}</div>`;
