@@ -8,8 +8,13 @@
 </head>
 <body>
 
-<!-- Login Screen -->
-<div class="login-screen" id="loginScreen">
+<!-- Loading Screen (shown first while checking auth) -->
+<div class="login-screen" id="loadingScreen">
+    <div class="loading"><div class="spinner"></div></div>
+</div>
+
+<!-- Login Screen (hidden by default) -->
+<div class="login-screen" id="loginScreen" style="display:none">
     <div class="login-card">
         <div class="login-header">
             <h1>ether.fi Cash</h1>

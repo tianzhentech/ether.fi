@@ -52,12 +52,14 @@ function showAddAccountModal() {
 
 // ─── Auth ───────────────────────────────────────────────────────────
 function showLoginScreen() {
+    document.getElementById('loadingScreen').style.display = 'none';
     document.getElementById('appContainer').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
     setTimeout(() => document.getElementById('loginUsername')?.focus(), 100);
 }
 
 function showApp() {
+    document.getElementById('loadingScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appContainer').style.display = 'flex';
     updateSidebarUserInfo();
