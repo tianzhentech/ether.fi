@@ -554,7 +554,31 @@ def create_card(account_id: str, auth: dict = Depends(require_auth)):
         result = client.create_card("Virtual")
         return {"ok": True, "result": result}
     except Exception as e:
-        raise HTTPException(500, str(e))
+        # Extract detailed error from ether.fi API response
+        error_msg = str(e)
+        error_detail = None
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                body = e.response.json()
+                error_detail = body
+                msg = body.get("message") or body.get("error") or ""
+                code = body.get("code", "")
+                if msg:
+                    error_msg = f"{msg} (code: {code})" if code else msg
+            except Exception:
+                error_msg = e.response.text[:500] if hasattr(e.response, 'text') else error_msg
+        # Try to include slot info for context
+        slot_info = None
+        try:
+            slot_info = client.get_card_slots()
+        except Exception:
+            pass
+        status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
+        raise HTTPException(status_code, {
+            "error": error_msg,
+            "slots": slot_info,
+            "detail": error_detail,
+        })
 
 
 @app.delete("/api/accounts/{account_id}/cards/{card_id}")

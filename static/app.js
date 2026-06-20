@@ -35,19 +35,26 @@ async function api(method, path, body = null) {
     }
     if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || err.message || 'Request failed');
+        const detail = err.detail;
+        // If detail is a structured error object (e.g., from card creation), include it
+        if (detail && typeof detail === 'object' && detail.error) {
+            const e = new Error(detail.error);
+            e.errorData = detail;
+            throw e;
+        }
+        throw new Error(detail || err.message || 'Request failed');
     }
     return res.json();
 }
 
 // ─── Toast ──────────────────────────────────────────────────────────
-function toast(msg, type = 'info') {
+function toast(msg, type = 'info', duration = 3000) {
     const container = document.getElementById('toastContainer');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
     el.textContent = msg;
     container.appendChild(el);
-    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, duration);
 }
 
 // ─── Modal Helpers ──────────────────────────────────────────────────
@@ -883,7 +890,24 @@ async function createCard(accountId) {
         toast('卡片创建成功', 'success');
         await reloadCards(accountId);
     } catch (e) {
-        toast(e.message, 'error');
+        let msg = e.message;
+        // Check for structured error data with slot info
+        if (e.errorData && e.errorData.slots) {
+            const slots = e.errorData.slots;
+            if (slots.nextCreateDate) {
+                const d = new Date(slots.nextCreateDate);
+                const diff = d.getTime() - Date.now();
+                if (diff > 0) {
+                    const days = Math.floor(diff / 86400000);
+                    const hours = Math.floor((diff % 86400000) / 3600000);
+                    msg += `\n🕐 可创建时间: ${days}天${hours}小时后`;
+                }
+            }
+            if (slots.virtualCoolDown > 0) {
+                msg += `\n❄️ 冷却卡位: ${slots.virtualCoolDown}个`;
+            }
+        }
+        toast(msg, 'error', 8000);
     }
 }
 
