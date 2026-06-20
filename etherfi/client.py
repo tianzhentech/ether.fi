@@ -164,13 +164,41 @@ class EtherFiClient:
     @staticmethod
     def _card_slots_from_data(data: dict) -> dict:
         cards = data.get("accountUserCards", [])
+        deleted_cards = data.get("deletedAccountUserCards", [])
+        cooldown_count = data.get("virtualCardsOnDeleteCoolDown", 0)
+        next_create = data.get("nextPossibleVirtualCardCreationDate")
+
+        # If API doesn't return nextCreateDate but there's a cooldown,
+        # calculate it from the most recent deletedAt + 30 days
+        if not next_create and cooldown_count > 0 and deleted_cards:
+            # Find cards that are likely in cooldown (not excluded, most recent deletions)
+            cooldown_candidates = [
+                c for c in deleted_cards
+                if c.get("deletedAt") and not c.get("excludeFromCooldown")
+            ]
+            if cooldown_candidates:
+                # Sort by deletedAt descending, take the most recent ones
+                cooldown_candidates.sort(key=lambda c: c.get("deletedAt", ""), reverse=True)
+                # The next create date is determined by the OLDEST of the cooldown cards
+                # (the one that will finish cooling first)
+                oldest_cooldown = cooldown_candidates[min(cooldown_count - 1, len(cooldown_candidates) - 1)]
+                deleted_at = oldest_cooldown.get("deletedAt", "")
+                if deleted_at:
+                    from datetime import datetime, timedelta, timezone
+                    try:
+                        dt = datetime.fromisoformat(deleted_at.replace("Z", "+00:00"))
+                        next_dt = dt + timedelta(days=30)
+                        next_create = next_dt.isoformat().replace("+00:00", "Z")
+                    except Exception:
+                        pass
+
         return {
             "maxVirtual": data.get("maxVirtualCardCount", 3),
             "virtualLeft": data.get("virtualCardsLeft", 0),
-            "virtualCoolDown": data.get("virtualCardsOnDeleteCoolDown", 0),
-            "nextCreateDate": data.get("nextPossibleVirtualCardCreationDate"),
+            "virtualCoolDown": cooldown_count,
+            "nextCreateDate": next_create,
             "activeCards": len(cards),
-            "deletedCards": data.get("deletedAccountUserCards", []),
+            "deletedCards": deleted_cards,
         }
 
     def get_cards_data(self) -> dict:

@@ -607,6 +607,22 @@ def card_slots(account_id: str, auth: dict = Depends(require_auth)):
         raise HTTPException(500, str(e))
 
 
+@app.get("/api/accounts/{account_id}/cards-raw")
+def cards_raw(account_id: str, auth: dict = Depends(require_auth)):
+    """Debug: return raw ether.fi API response for user-cards."""
+    client = get_client(account_id, auth["sub"], auth.get("role", "user"))
+    try:
+        from etherfi.client import BASE_URL
+        resp = client.session.get(
+            f"{BASE_URL}/v2/cards/{client.account_id}/user-cards",
+            headers=client._headers(),
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/accounts/{account_id}/cards/{card_id}/reveal")
 def reveal_card(account_id: str, card_id: str, auth: dict = Depends(require_auth)):
     client = get_client(account_id, auth["sub"], auth.get("role", "user"))
