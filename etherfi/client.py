@@ -165,38 +165,45 @@ class EtherFiClient:
     def _card_slots_from_data(data: dict) -> dict:
         cards = data.get("accountUserCards", [])
         deleted_cards = data.get("deletedAccountUserCards", [])
-        cooldown_count = data.get("virtualCardsOnDeleteCoolDown", 0)
+        api_cooldown_count = data.get("virtualCardsOnDeleteCoolDown", 0)
         next_create = data.get("nextPossibleVirtualCardCreationDate")
 
-        # If API doesn't return nextCreateDate but there's a cooldown,
-        # calculate it from the most recent deletedAt + 30 days
-        if not next_create and cooldown_count > 0 and deleted_cards:
-            # Find cards that are likely in cooldown (not excluded, most recent deletions)
-            cooldown_candidates = [
-                c for c in deleted_cards
-                if c.get("deletedAt") and not c.get("excludeFromCooldown")
-            ]
-            if cooldown_candidates:
-                # Sort by deletedAt descending, take the most recent ones
-                cooldown_candidates.sort(key=lambda c: c.get("deletedAt", ""), reverse=True)
-                # The next create date is determined by the OLDEST of the cooldown cards
-                # (the one that will finish cooling first)
-                oldest_cooldown = cooldown_candidates[min(cooldown_count - 1, len(cooldown_candidates) - 1)]
-                deleted_at = oldest_cooldown.get("deletedAt", "")
-                if deleted_at:
-                    from datetime import datetime, timedelta, timezone
-                    try:
-                        dt = datetime.fromisoformat(deleted_at.replace("Z", "+00:00"))
-                        next_dt = dt + timedelta(days=30)
-                        next_create = next_dt.isoformat().replace("+00:00", "Z")
-                    except Exception:
-                        pass
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+
+        # Calculate actual cooldown cards from deletedAt timestamps
+        # (don't fully trust API's virtualCardsOnDeleteCoolDown — it can be inaccurate)
+        cooldown_dates = []  # list of cooldown end dates (sorted earliest first)
+        for c in deleted_cards:
+            deleted_at = c.get("deletedAt")
+            if not deleted_at or c.get("excludeFromCooldown"):
+                continue
+            try:
+                dt = datetime.fromisoformat(deleted_at.replace("Z", "+00:00"))
+                cooldown_end = dt + timedelta(days=30)
+                if cooldown_end > now:
+                    cooldown_dates.append(cooldown_end)
+            except Exception:
+                continue
+
+        cooldown_dates.sort()  # earliest first = the one that will free up soonest
+        actual_cooldown = max(len(cooldown_dates), api_cooldown_count)
+
+        # Build per-slot cooldown info (for multiple cooldown slots)
+        cooldown_slots = []
+        for cd in cooldown_dates:
+            cooldown_slots.append(cd.isoformat().replace("+00:00", "Z"))
+
+        # nextCreateDate = earliest cooldown end (first slot to free up)
+        if cooldown_slots and not next_create:
+            next_create = cooldown_slots[0]
 
         return {
             "maxVirtual": data.get("maxVirtualCardCount", 3),
             "virtualLeft": data.get("virtualCardsLeft", 0),
-            "virtualCoolDown": cooldown_count,
+            "virtualCoolDown": actual_cooldown,
             "nextCreateDate": next_create,
+            "cooldownDates": cooldown_slots,  # per-slot cooldown end dates
             "activeCards": len(cards),
             "deletedCards": deleted_cards,
         }
